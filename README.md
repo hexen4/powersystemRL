@@ -7,6 +7,7 @@ skeleton code based off: https://github.com/GitX123/microgrid-ems-drl
 Review the repository to understand key modules such as environment setup, DRL algorithms (PPO, TD3), data handling, and reward functions.
 # 2. Integrate TCSAC Algorithm:
 Create a new DRL agent by adapting the existing TD3, introducing the triplet-critic mechanism (within model.py) to handle over/underestimation bias as required by the TCSAC algorithm + change NN architecture. Also include entropy reg.(within TCSAC agent), and change hyperparameters.
+  Ensure to include operating constraints in Actor/Agent (action constraints, reward penalisation for violating, state and environment constraints, prioritize transitions where constraint violations occur, helping the agent learn faster how to avoid such violations)
 # 3. Modify the Environment for Interval Optimization:
 Update the environment to handle uncertainty in renewable energy sources instead of battery management. Use interval variables for upper and lower bounds to simulate energy fluctuations.
 # 4. Redefine Reward Function:
