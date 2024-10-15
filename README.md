@@ -1,7 +1,7 @@
 # powersystemRL
 
 1) Implementation of https://ieeexplore.ieee.org/document/10345718 onto https://www.sciencedirect.com/science/article/pii/S2213138821002356
-
+skeleton code based off: https://github.com/GitX123/microgrid-ems-drl
 
 # 1. Understand the Existing Code Structure:
 Review the repository to understand key modules such as environment setup, DRL algorithms (PPO, TD3), data handling, and reward functions.
