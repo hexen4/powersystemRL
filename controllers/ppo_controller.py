@@ -1,3 +1,5 @@
+##this agent is redundant, use TD3 agent instead
+
 import os
 import numpy as np
 import tensorflow as tf

@@ -7,7 +7,7 @@ elements:
 - 2 Batteries
 - 8 Loads
 '''
-
+# TODO: Change the load, wind turbine (WT), PV, and bus initialization as required
 import pandapower as pp
 from pandapower.control import ConstControl
 from setting import *

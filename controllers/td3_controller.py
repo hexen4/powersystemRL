@@ -1,3 +1,4 @@
+# TODO what does learn() do? -> update hyperparameters
 '''
 class:
 - TD3Agent
@@ -21,7 +22,7 @@ class:
     - update_target_networks()
     - time_step()
 '''
-
+# TODO introduce entropy reg.
 import logging
 import os
 from typing import Dict
@@ -30,7 +31,6 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
-
 from pandapower.control.basic_controller import Controller
 from controllers.models import ActorMuModel, CriticQModel, SequenceModel, get_mu_actor, get_q_critic
 from controllers.buffer import ReplayBuffer, PrioritizedReplayBuffer
@@ -38,6 +38,8 @@ from setting import *
 import utils
 
 class TD3Agent(Controller):
+    # TODO change net
+    # TODO change profiles
     def __init__(self, net, ids, pv_profile, wt_profile, load_profile, price_profile,
         noise_type = 'action', sequence_model_type='none', use_pretrained_sequence_model=False,
         n_epochs=None, training=False,
@@ -79,6 +81,7 @@ class TD3Agent(Controller):
         self.r_norm = utils.NormalizeReward()
 
         # action bounds
+        # TODO change actions
         self.max_action = MAX_ACTION
         self.min_action = MIN_ACTION
 
@@ -136,14 +139,14 @@ class TD3Agent(Controller):
         self.loadr10_id = ids.get('Load_r10')
         self.loadr11_id = ids.get('Load_r11')
         self.trafo0_id = ids.get('trafo0') # PCC trafo
-
+        
         # buffer
         # self.buffer = ReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
         self.buffer = PrioritizedReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
 
         # models
         self.sequence_model_type = sequence_model_type
-        if self.sequence_model_type == 'none':
+        if self.sequence_model_type == 'none': #evaluates to this
             # actor critic
             self.actor = get_mu_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel(self.n_action))
             self.perturbed_actor = get_mu_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel(self.n_action))
@@ -152,6 +155,7 @@ class TD3Agent(Controller):
             self.critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
             self.target_critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
             self.target_critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+            # TO add third critic
         else:
             # sequence model
             self.sequence_model = SequenceModel(sequence_model_type, name='sequence_model')
@@ -171,7 +175,7 @@ class TD3Agent(Controller):
         self.critic2.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
 
         # initialization
-        if self.training:
+        if self.training: # TODO train first lol
             if self.use_pretrained_sequence_model:
                 file_path = os.path.join('.', 'pretrained_sequence_model', self.sequence_model_type, 'pretrained_sequence_model_weights.hdf5')
                 self.sequence_model.load_weights(file_path, by_name=True)

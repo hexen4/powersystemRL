@@ -1,3 +1,5 @@
+## used as benchmark. heuristic controller -> makes decisions based on predefined rules. battery management!!
+
 import numpy as np
 from pandapower.control.basic_controller import Controller
 

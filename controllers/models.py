@@ -71,6 +71,7 @@ class SequenceModel(keras.Model):
         return state_seq
 
 class ActorMuModel(keras.Model):
+    # TODO change architecture
     def __init__(self, n_action, **kwargs):
         super().__init__()
         # self.dense_proj = get_dense_proj_fnn()

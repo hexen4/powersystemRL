@@ -7,7 +7,7 @@ class
 import numpy as np
 import scipy.signal
 from typing import Dict
-
+# TODO change to buffer used in paper
 class Buffer:
     def __init__(self, buffer_size, state_seq_shape, state_fnn_shape, n_actions, gamma=0.99, lam=0.97):
         self.trajectory_start_idx = 0

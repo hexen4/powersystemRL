@@ -242,12 +242,12 @@ if __name__ == '__main__':
     price_profile = pd.read_csv('./data/profile/price_profile.csv')
 
     # --- train, test ---
-    train_ppo(n_train_runs, n_epochs, train_start, train_length, 
-        pv_profile, wt_profile, load_profile, price_profile, sequence_model_type)
+    #train_ppo(n_train_runs, n_epochs, train_start, train_length, 
+    #    pv_profile, wt_profile, load_profile, price_profile, sequence_model_type)
 
-    # train_td3(n_runs=n_train_runs, n_epochs=n_epochs, start=train_start, train_length=train_length,
-    #     pv_profile=pv_profile, wt_profile=wt_profile, load_profile=load_profile, price_profile=price_profile,
-    #     sequence_model_type=sequence_model_type, use_pretrained_sequence_model=use_pretrained_sequence_model, noise_type=noise_type)
+    train_td3(n_runs=n_train_runs, n_epochs=n_epochs, start=train_start, train_length=train_length,
+         pv_profile=pv_profile, wt_profile=wt_profile, load_profile=load_profile, price_profile=price_profile,
+         sequence_model_type=sequence_model_type, use_pretrained_sequence_model=use_pretrained_sequence_model, noise_type=noise_type)
 
     # test(n_runs=n_test_runs, start=test_start, test_length=test_length, 
     #     pv_profile=pv_profile, wt_profile=wt_profile, load_profile=load_profile, price_profile=price_profile,
