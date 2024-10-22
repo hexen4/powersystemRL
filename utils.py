@@ -21,7 +21,7 @@ import tensorflow as tf
 
 from setting import *
 
-# --- Action Scaling ---
+# --- Action Scaling --- [-1,1] -> [min, max]
 def scale_to_mg(nn_action, min_action, max_action):
     nn_action = np.clip(nn_action, -1., 1.)
     return (nn_action + 1) * (max_action - min_action) / 2 + min_action
@@ -136,6 +136,7 @@ def normalize_state(state) -> Dict:
 
 # --- Reward ---
 def cal_cost(price, pcc_p_mw, bat5_soc_now, bat5_soc_prev, bat10_soc_now, bat10_soc_prev, **kwargs):
+    # TODO change cost function
     transaction_cost = price * pcc_p_mw
     # mgt_cost = C_MGT5[0] * pow(mgt5_p_mw, 2) + C_MGT5[1] * mgt5_p_mw + \
     #     C_MGT9[0] * pow(mgt9_p_mw, 2) + C_MGT9[1] * mgt9_p_mw + \
@@ -157,6 +158,7 @@ def cal_cost(price, pcc_p_mw, bat5_soc_now, bat5_soc_prev, bat10_soc_now, bat10_
     return cost, normalized_cost
 
 def extra_reward(nn_bat_p_mw, valid_bat_p_mw):
+    # TODO look at paper to see what it does with penality for invalid action
     # penalty for invalid action
     dif = np.sum(np.abs(nn_bat_p_mw - valid_bat_p_mw))
     dif /= (P_B10_MAX + P_B5_MAX)
@@ -319,6 +321,7 @@ def get_excess(pv_profile, wt_profile, load_profile, t):
     return excess
 
 def policy_simple(net, ids, bat5_soc, bat10_soc, bat5_max_e_mwh, bat10_max_e_mwh):
+    # TODO simple, heuristic policy that balances excess power between charging / discharging batteries. LOOK AT PAPER
     p_pv = net.sgen.at[ids.get('pv3'), 'p_mw'] +\
         net.sgen.at[ids.get('pv4'), 'p_mw'] +\
         net.sgen.at[ids.get('pv5'), 'p_mw'] +\

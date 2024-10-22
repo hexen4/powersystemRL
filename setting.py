@@ -8,10 +8,10 @@
 import numpy as np
 
 # --- Hyperparameters ---
-BATCH_SIZE = 100
+BATCH_SIZE = 128
 GAMMA = 0.99
-LR_ACTOR = 5e-4
-LR_CRITIC = 5e-4
+LR_ACTOR = 0.001
+LR_CRITIC = 0.001
 NN_BOUND = 1.
 SEQ_LENGTH= 1
 
@@ -44,6 +44,7 @@ HOUR_PER_TIME_STEP = 1
 
 # --- Power Ratings ---
 # PV
+# TODO replace this with uncertain values?
 P_PV3_MAX = 0.3
 P_PV4_MAX = 0.3
 P_PV5_MAX = 0.4
@@ -68,6 +69,7 @@ P_WT_MAX_LIST = [P_WT7_MAX]
 # P_MGT_MAX_LIST = [P_MGT5_MAX, P_MGT9_MAX, P_MGT10_MAX]
  
 # Battery
+# TODO ask Pratik about the power ratings
 E_B5_MAX = 3.
 P_B5_MAX = 0.6
 P_B5_MIN = -0.6
@@ -99,17 +101,20 @@ P_EXCESS_MAX = sum([*P_PV_MAX_LIST, *P_WT_MAX_LIST])
 # N_INTERMITTENT_STATES = len([P_EXCESS_MAX,'price'])
 N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST,'price'])
 # N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST, P_EXCESS_MAX,'price'])
-N_CONTROLLABLE_STATES = len([P_B5_MAX, P_B10_MAX])
+N_CONTROLLABLE_STATES = len([P_B5_MAX, P_B10_MAX]) # TODO change the states here
+# TODO add uncertainty power output of wind + PV
 STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
 STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
 
 # Action
+# TODO actions only defined for batteries?
 ACTION_IDX = {'p_b5': 0, 'p_b10': 1}
 MAX_ACTION = np.array([P_B5_MAX, P_B10_MAX])
 MIN_ACTION = np.array([P_B5_MIN, P_B10_MIN])
 N_ACTION = len(MAX_ACTION)
 
 # --- Cost Parameters ---
+# TODO change cost parameters
 C_PRICE_MAX = 3.
 # C_MGT5 = [100, 1.5]
 # C_MGT9 = [15.8, 2.]

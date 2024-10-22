@@ -1,4 +1,6 @@
 # TODO what does learn() do? -> update hyperparameters
+# TODO need to add interval optimisation
+# TODO introduce entropy reg.
 '''
 class:
 - TD3Agent
@@ -22,7 +24,6 @@ class:
     - update_target_networks()
     - time_step()
 '''
-# TODO introduce entropy reg.
 import logging
 import os
 from typing import Dict
@@ -155,27 +156,28 @@ class TD3Agent(Controller):
             self.critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
             self.target_critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
             self.target_critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-            # TO add third critic
-        else:
-            # sequence model
-            self.sequence_model = SequenceModel(sequence_model_type, name='sequence_model')
-            self.sequence_model.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
+            # TODO add third critic
+            # TODO add 3 actors??
+        # else:
+        #     # sequence model
+        #     self.sequence_model = SequenceModel(sequence_model_type, name='sequence_model')
+        #     self.sequence_model.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
 
-            # actor critic
-            self.actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
-            self.perturbed_actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
-            self.target_actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
-            self.critic1 = get_q_critic(self.sequence_model, CriticQModel())
-            self.critic2 = get_q_critic(self.sequence_model, CriticQModel())
-            self.target_critic1 = get_q_critic(self.sequence_model, CriticQModel())
-            self.target_critic2 = get_q_critic(self.sequence_model, CriticQModel())
+        #     # actor critic
+        #     self.actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
+        #     self.perturbed_actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
+        #     self.target_actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
+        #     self.critic1 = get_q_critic(self.sequence_model, CriticQModel())
+        #     self.critic2 = get_q_critic(self.sequence_model, CriticQModel())
+        #     self.target_critic1 = get_q_critic(self.sequence_model, CriticQModel())
+        #     self.target_critic2 = get_q_critic(self.sequence_model, CriticQModel())
 
-        self.actor.compile(optimizer=Adam(learning_rate=lr_actor, epsilon=1e-5))
-        self.critic1.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
-        self.critic2.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
+        # self.actor.compile(optimizer=Adam(learning_rate=lr_actor, epsilon=1e-5))
+        # self.critic1.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
+        # self.critic2.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
 
         # initialization
-        if self.training: # TODO train first lol
+        if self.training: 
             if self.use_pretrained_sequence_model:
                 file_path = os.path.join('.', 'pretrained_sequence_model', self.sequence_model_type, 'pretrained_sequence_model_weights.hdf5')
                 self.sequence_model.load_weights(file_path, by_name=True)
@@ -266,7 +268,7 @@ class TD3Agent(Controller):
             # update networks
             self.learn()
 
-    def get_state(self, net, t):
+    def get_state(self, net, t): # TODO i think this is where the state variables are defined
         state_seq = np.zeros(self.state_seq_shape)
         state_fnn = np.zeros(self.state_fnn_shape)
 
