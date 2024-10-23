@@ -23,7 +23,7 @@ import utils
 from cigre_mv_microgrid import create_cigre_mv_microgrid
 from controllers.baseline_controller import RandomControl, SimpleControl
 from controllers.td3_controller import TD3Agent
-from controllers.ppo_controller import PPOAgent
+#from controllers.ppo_controller import PPOAgent
 from setting import *
 
 #def train_ppo(n_runs, n_epochs, start, train_length, pv_profile, wt_profile, load_profile, price_profile,
@@ -102,6 +102,7 @@ def train_td3(n_runs, n_epochs, start, train_length, pv_profile, wt_profile, loa
     ep_cost_list = np.zeros((n_runs, n_epochs))
     for run in range(n_runs):
         net, ids = create_cigre_mv_microgrid(pv_ds, wt_ds, load_ds) # TODO change this to actual network
+        pp.plotting.simple_plot(net, respect_switches=False, line_width=1.0, bus_size=1.0, ext_grid_size=1.0, trafo_size=1.0, plot_loads=False, plot_sgens=False, load_size=1.0, sgen_size=1.0, switch_size=2.0, switch_distance=1.0, plot_line_switches=False, scale_size=True, bus_color='b', line_color='grey', trafo_color='k', ext_grid_color='y', switch_color='k', library='igraph', show_plot=True, ax=None)
         agent = TD3Agent(net, ids, pv_profile, wt_profile, load_profile, price_profile,
             training=True, n_epochs=n_epochs,
             sequence_model_type=sequence_model_type, use_pretrained_sequence_model=use_pretrained_sequence_model, 

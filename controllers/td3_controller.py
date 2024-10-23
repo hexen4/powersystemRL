@@ -30,8 +30,8 @@ from typing import Dict
 import numpy as np
 
 import tensorflow as tf
-import tensorflow.keras as keras
-from tensorflow.keras.optimizers import Adam
+import keras as keras
+#from tensorflow.keras.optimizers import Adam for testing need later
 from pandapower.control.basic_controller import Controller
 from controllers.models import ActorMuModel, CriticQModel, SequenceModel, get_mu_actor, get_q_critic
 from controllers.buffer import ReplayBuffer, PrioritizedReplayBuffer
@@ -84,7 +84,7 @@ class TD3Agent(Controller):
         # action bounds
         # TODO change actions
         self.max_action = MAX_ACTION
-        self.min_action = MIN_ACTION
+        self.min_action = MIN_ACTION    
 
         # generator
         # self.mgt5_id = ids.get('mgt5')

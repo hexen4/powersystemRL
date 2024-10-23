@@ -6,10 +6,13 @@ class:
 '''
 
 import tensorflow as tf
-import tensorflow_addons as tfa
-from tensorflow_addons.layers import SpectralNormalization
-import tensorflow.keras as keras
-import tensorflow.keras.layers as layers
+#import tensorflow_addons as tfa
+#from tensorflow_addons.layers import SpectralNormalization
+#from keras_spectral_normalization import SpectralNormalization
+import keras as keras
+from keras import layers
+import torch
+#import tensorflow.keras.layers as layers
 
 from setting import *
 
@@ -124,7 +127,7 @@ class CriticQModel(keras.Model):
         self.concat = layers.Concatenate()
         self.dense = keras.Sequential([
             layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
-            SpectralNormalization(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
+            torch.nn.utils.spectral_norm(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
         ])
         self.q = layers.Dense(1)
 
@@ -143,8 +146,8 @@ class CriticVModel(keras.Model):
         # self.dense_proj_fnn = get_dense_proj_fnn(activation='tanh')
         self.concat = layers.Concatenate()
         self.dense = keras.Sequential([
-            SpectralNormalization(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
-            SpectralNormalization(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
+            torch.nn.utils.spectral_norm(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
+            torch.nn.utils.spectral_norm(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
         ])
         self.v = layers.Dense(1)
     
@@ -182,7 +185,7 @@ def get_dense_proj_seq(proj_dim=DENSE_DIM_SEQ, activation='tanh'):
 def get_conv1d_model():
     inputs = keras.Input(shape=(SEQ_LENGTH, DENSE_DIM_SEQ))
     outputs = keras.Sequential([
-        SpectralNormalization(layers.Conv1D(8, 5, activation='tanh')),
+        torch.nn.utils.spectral_norm(layers.Conv1D(8, 5, activation='tanh')),
         layers.MaxPooling1D(2),
         layers.GRU(16)
         # layers.Conv1D(8, 3, activation='tanh'),
