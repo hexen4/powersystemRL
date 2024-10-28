@@ -128,6 +128,11 @@ MAX_COST = C_PRICE_MAX * (P_B5_MAX + P_B10_MAX + P_LOAD_MAX) + \
 
 REWARD_INVALID_ACTION = -5e-3
 
+
+##my variables
+
+N_NODE = 33
+
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')
     print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')
