@@ -115,16 +115,9 @@ N_ACTION = len(MAX_ACTION)
 
 # --- Cost Parameters ---
 # TODO change cost parameters
-C_PRICE_MAX = 3.
-# C_MGT5 = [100, 1.5]
-# C_MGT9 = [15.8, 2.]
-# C_MGT10 = [100, 1.5]
-C_BAT5_DoD = 0.43
-C_BAT10_DoD = 0.16
-C_SOC_LIMIT = 100
-MAX_COST = C_PRICE_MAX * (P_B5_MAX + P_B10_MAX + P_LOAD_MAX) + \
-        (C_BAT5_DoD + C_BAT10_DoD) * pow(SOC_MAX-SOC_MIN, 2) + \
-        C_SOC_LIMIT
+A1 = 0.0001
+A2 = 0.1032
+A3 = 14.5216
 
 REWARD_INVALID_ACTION = -5e-3
 
@@ -132,6 +125,7 @@ REWARD_INVALID_ACTION = -5e-3
 ##my variables
 
 N_NODE = 33
+
 
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')

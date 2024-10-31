@@ -135,27 +135,112 @@ def normalize_state(state) -> Dict:
     return normalized_state_rnn, normalized_state_fnn
 
 # --- Reward ---
-def cal_cost(price, pcc_p_mw, bat5_soc_now, bat5_soc_prev, bat10_soc_now, bat10_soc_prev, **kwargs):
-    # TODO change cost function
-    transaction_cost = price * pcc_p_mw
-    # mgt_cost = C_MGT5[0] * pow(mgt5_p_mw, 2) + C_MGT5[1] * mgt5_p_mw + \
-    #     C_MGT9[0] * pow(mgt9_p_mw, 2) + C_MGT9[1] * mgt9_p_mw + \
-    #     C_MGT10[0] * pow(mgt10_p_mw, 2) + C_MGT10[1] * mgt10_p_mw
-    battery_cost = C_BAT5_DoD * pow((bat5_soc_now - bat5_soc_prev), 2) + \
-        C_BAT10_DoD * pow((bat10_soc_now - bat10_soc_prev), 2)
-    soc_penalty = C_SOC_LIMIT if ((bat5_soc_now > (1+SOC_TOLERANCE)*SOC_MAX or bat5_soc_now < (1-SOC_TOLERANCE)*SOC_MIN) or 
-        (bat10_soc_now > (1+SOC_TOLERANCE)*SOC_MAX or bat10_soc_now < (1-SOC_TOLERANCE)*SOC_MIN)) else 0
-
+def cal_costgen(power_gen, **kwargs): # for each action (power generation) -> calc
+    #pcc_p_mw -> The PCC is the point where the microgrid connects to the main grid or utility network. It serves as the interface for exchanging power between the microgrid and the larger grid.
+    cost = A1 * power_gen ** 2 + A2 * power_gen + A3
     if len(kwargs):
         ids = kwargs['ids']
         t = kwargs['t']
         net = kwargs['net']
-        log_cost_info(transaction_cost, battery_cost, soc_penalty, t, net=net, ids=ids, pcc_p_mw=pcc_p_mw)
+        log_cost_info(cost, t, net=net, ids=ids, pcc_p_mw=power_gen)
 
-    cost = (transaction_cost + battery_cost) * HOUR_PER_TIME_STEP + soc_penalty 
-    normalized_cost = cost / MAX_COST
+    #normalise cost with stored max cost in log_cost?
+    return cost
 
-    return cost, normalized_cost
+def cal_costpow(alpha,power_transfer, **kwargs):
+    cost = alpha*power_transfer
+    if len(kwargs):
+        ids = kwargs['ids']
+        t = kwargs['t']
+        net = kwargs['net']
+        log_cost_info(cost, t, net=net, ids=ids, pcc_p_mw=power_transfer)
+
+    return cost
+
+# for each consumer for each hour -> sum 
+def MGO_profit(alpha,curtailed,incentive, **kwargs):
+    if not isinstance(curtailed, (list, np.ndarray)):
+        raise TypeError("Curtailed should be a list or numpy array representing the curtailment of each consumer.")
+    profit = alpha * curtailed - incentive * curtailed
+    if len(kwargs):
+        ids = kwargs['ids']
+        t = kwargs['t']
+        net = kwargs['net']
+        log_cost_info(profit, t, net=net, ids=ids, pcc_p_mw=curtailed)
+
+    return profit
+def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, P_demand, curtailed, P_loss):
+    #P_load is customer demand
+    if not isinstance(P_demand, (list, np.ndarray)):
+        raise TypeError("P_load should be a list or numpy array representing the load demand of each consumer.")
+    if not isinstance(curtailed, (list, np.ndarray)):
+        raise TypeError("Curtailments should be a list or numpy array representing power curtailments for each consumer.")
+    # Ensure both lists have the same length
+    if len(P_demand) != len(curtailed):
+        raise ValueError("P_load and curtailments must have the same length, representing each consumer.")
+    total_supply = P_grid + P_gen + P_solar + P_wind
+    total_demand = sum(P_demand) - sum(curtailed) + P_loss
+    if not np.isclose(total_supply, total_demand, atol=1e-5):
+        penalty = abs(total_supply - total_demand) ** 2  # Apply a penalty based on imbalance
+        return penalty
+    return 0  # No penalty if constraint satisfied
+
+def generation_limit_constraint(P_gen, P_min, P_max):
+    if P_gen < P_min:
+        return (P_min - P_gen) ** 2  # Penalty for being below minimum
+    elif P_gen > P_max:
+        return (P_gen - P_max) ** 2  # Penalty for exceeding maximum
+    return 0
+def ramp_rate_constraint(P_gen, P_gen_prev, P_ramp_up, P_ramp_down):
+    delta = P_gen - P_gen_prev
+    if delta > P_ramp_up:
+        return (delta - P_ramp_up) ** 2
+    elif delta < -P_ramp_down:
+        return (delta + P_ramp_down) ** 2
+    return 0
+def curtailment_limit_constraint(curtailed, P_demand, mu1 = 0, mu2 = 0.6): # TODO need to do for all customemrs
+    if not isinstance(curtailed, (list, np.ndarray)):
+        raise TypeError("Curtailments should be a list or numpy array representing power curtailments for each consumer.")
+    if not isinstance(P_demand, (list, np.ndarray)):
+        raise TypeError("P_demand should be a list or numpy array representing power curtailments for each consumer.")
+    min_curtailment = mu1 * P_demand
+    max_curtailment = mu2 * P_demand
+    if curtailed < min_curtailment:
+        return (min_curtailment - curtailments) ** 2
+    elif curtailed > max_curtailment:
+        return (curtailed - max_curtailment) ** 2
+    return 0
+def daily_curtailment_limit(curtailed, P_demand, lambda_ = 0.4): # TODO for each customer
+    if not isinstance(curtailed, (list, np.ndarray)):
+        raise TypeError("Curtailments should be a list or numpy array representing power curtailments for each consumer.")
+    if not isinstance(P_demand, (list, np.ndarray)):
+        raise TypeError("P_demand should be a list or numpy array representing power curtailments for each consumer.")
+    daily_curtailment = sum(curtailed)
+    max_curtailment = lambda_ * P_demand
+    if daily_curtailment > max_curtailment:
+        return (daily_curtailment - max_curtailment) ** 2
+    return 0
+def consumer_benefit_constraint(benefits, incentive, discomforts, psi = 0.5): # TODO for each customer
+    total_benefit = sum(psi * benefits * incentive - (1 - psi) * discomforts)
+    return max(0, -total_benefit) ** 2  # Penalty if benefit is not enough4
+def benefit_limit_constraint(benefits, rankings): 
+    #consumers with largeer benefits should have higher rankings
+    penalty = 0
+    for j in range(1, len(rankings)):
+        if benefits[rankings[j]] > benefits[rankings[j - 1]]:
+            penalty += (benefits[rankings[j]] - benefits[rankings[j - 1]]) ** 2
+    return penalty
+def incentive_rate_constraint(incentive, market_price, eta = 0.4):
+    if incentive < market_price*eta:
+        return (market_price*eta - incentive) ** 2
+    elif incentive > market_price:
+        return (incentive - market_price) ** 2
+    return 0
+def budget_limit_constraint(incentive, curtailed,budget): #for each customer for each hour
+    product = incentive*curtailed
+    if product > budget:
+        return (product-budget) ** 2  # Penalty if exceeding budget
+    return 0
 
 def extra_reward(nn_bat_p_mw, valid_bat_p_mw):
     # TODO look at paper to see what it does with penality for invalid action
@@ -226,7 +311,7 @@ def plot_pf_results(dir, start, length):
     plt.ylabel('MW')
     plt.show()
 
-def view_profile(pv_profile, wt_profile, load_profile, price_profile, start=None, length=None):
+def view_profile(pv_profile, wt_profile,load_profile,price_profile, start=None, length=None):
     start = 0 if start is None else start
     length = (len(pv_profile.index)-start) if length is None else length
     pv_p_mw = pv_profile.iloc[start: start+length, :]
@@ -236,6 +321,7 @@ def view_profile(pv_profile, wt_profile, load_profile, price_profile, start=None
 
     # MW and excess profile
     profile_p_mw = pd.concat([pv_p_mw, wt_p_mw, load_p_mw]).iloc[start: start+length, :]
+    profile_p_mw = pd.concat([pv_p_mw, wt_p_mw]).iloc[start: start+length, :]
     excess_profile = pv_p_mw.sum(axis=1) + wt_p_mw.sum(axis=1) - load_p_mw.sum(axis=1)
     excess_profile = pd.DataFrame({'Excess': excess_profile})
 
@@ -253,8 +339,8 @@ def view_profile(pv_profile, wt_profile, load_profile, price_profile, start=None
     load_p_mw.plot(xlabel='hour', ylabel='p_mw', title='Load')
     price_profile.plot(xlabel='hour', ylabel='price', title='Price')
     profile_p_mw.plot(xlabel='hour', ylabel='p_mw', title='Microgrid')
-    ax = excess_profile.plot(xlabel='hour', ylabel='p_mw', title='excess')
-    ax.plot(range(start, start+length), np.zeros((length),))
+    #ax = excess_profile.plot(xlabel='hour', ylabel='p_mw', title='excess')
+    #ax.plot(range(start, start+length), np.zeros((length),))
     plt.show()
 
 # --- Logging ---
@@ -270,6 +356,8 @@ def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
         logging.info(f'actor loss = {actor_loss}')
         logging.info(f'critic loss = {critic_loss}')
 
+
+# TODO change this
 def log_cost_info(transaction_cost, battery_cost, soc_penalty, t, freq=100, **kwargs):
     if t % freq == 0:
         net = kwargs['net']
@@ -375,3 +463,9 @@ def policy_simple(net, ids, bat5_soc, bat10_soc, bat5_max_e_mwh, bat10_max_e_mwh
         # p_mgt10 = 0. if excess > p_b  else min((p_b - excess) * mgt10_ratio, mgt10_op_point)
     
     return np.array([p_b5, p_b10])
+
+def interval_optimisation(minP,maxP):
+    # TODO implement interval optimisation
+    pass
+    # generator_data should be a DataFrame with time-indexed power profiles 
+    
