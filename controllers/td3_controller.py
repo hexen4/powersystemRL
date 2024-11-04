@@ -206,8 +206,82 @@ class TD3Agent(Controller):
         d = tf.math.reduce_mean(d)
         d = tf.math.sqrt(d)
         return d
-    
-    def calculate_reward(self, net, t):
+     
+    def calculate_reward(self, net, t): # TODO implement below code
+# class MicrogridEnv(gym.Env):
+#     def __init__(self, H, J, alpha, r, a1, a2, a3, w1, w2):
+#         super(MicrogridEnv, self).__init__()
+#         self.H = H  # Number of timesteps
+#         self.J = J  # Number of consumers
+#         self.alpha = alpha  # Grid power cost coefficient (array of length H)
+#         self.r = r  # Curtailment compensation rate (array of length H)
+#         self.a1, self.a2, self.a3 = a1, a2, a3  # Coefficients for F2
+#         self.w1, self.w2 = w1, w2  # Objective function weights
+        
+#         # Accumulators for the objective components
+#         self.F1_total = 0
+#         self.F2_total = 0
+#         self.F3_total = 0
+#         self.current_timestep = 0
+
+#     def reset(self):
+#         # Reset accumulators and timestep counter
+#         self.F1_total = 0
+#         self.F2_total = 0
+#         self.F3_total = 0
+#         self.current_timestep = 0
+#         # Reset the environment state (for Gym compatibility)
+#         return self._get_initial_state()
+
+#     def step(self, action):
+#         # Calculate components F1, F2, F3 for the current timestep
+#         P_Grid, P_g, P_solar, P_wind, curtailments = self._calculate_current_values(action)
+
+#         # F1: Grid power cost for current timestep
+#         F1_h = self.alpha[self.current_timestep] * P_Grid
+#         self.F1_total += F1_h
+
+#         # F2: Fuel cost for conventional DG
+#         F2_h = self.a1 * (P_g ** 2) + self.a2 * P_g + self.a3
+#         self.F2_total += F2_h
+
+#         # F3: Profit from curtailment compensation for MGO
+#         F3_h = sum(self.alpha[self.current_timestep] * curtailments[j] - self.r[self.current_timestep] * curtailments[j]
+#                    for j in range(self.J))
+#         self.F3_total += F3_h
+
+#         # Calculate the reward (using the objective function, F)
+#         F = self.w1 * (self.F1_total + self.F2_total) - self.w2 * self.F3_total
+#         reward = -F  # Reward might be the negative of the objective to represent minimization
+
+#         # Increment the timestep
+#         self.current_timestep += 1
+
+#         # Check if the episode is done (e.g., reached the end of the horizon H)
+#         done = self.current_timestep >= self.H
+
+#         # Return the current state, reward, done flag, and any additional info
+#         next_state = self._get_next_state()
+#         return next_state, reward, done, {}
+
+#     def _calculate_current_values(self, action):
+#         # Placeholder for method that calculates P_Grid, P_g, P_solar, P_wind, and curtailments
+#         # based on the action and current state of the environment.
+#         P_Grid = action.get('P_Grid', 0)
+#         P_g = action.get('P_g', 0)
+#         P_solar = action.get('P_solar', 0)
+#         P_wind = action.get('P_wind', 0)
+#         curtailments = action.get('curtailments', [0] * self.J)
+#         return P_Grid, P_g, P_solar, P_wind, curtailments
+
+#     def _get_initial_state(self):
+#         # Define the initial state of the environment
+#         return np.zeros(self.J + 2)  # Placeholder for the initial state representation
+
+#     def _get_next_state(self):
+#         # Define the transition logic for the next state
+#         return np.zeros(self.J + 2)  # Placeholder for the next state representation
+
         price = self.price_profile['price'][t - 1]
         cost, normalized_cost = utils.cal_cost(
             price=price,
@@ -388,6 +462,8 @@ class TD3Agent(Controller):
         # bat10_p_mw = np.clip(bat10_p_mw, p_b10_min, p_b10_max)
 
         # invalid action masking
+
+
         self.min_action[ACTION_IDX.get('p_b5')] = p_b5_min
         self.min_action[ACTION_IDX.get('p_b10')] = p_b10_min
         self.max_action[ACTION_IDX.get('p_b5')] = p_b5_max
@@ -397,7 +473,29 @@ class TD3Agent(Controller):
         mg_action = np.array([bat5_p_mw, bat10_p_mw])
         self.time_step_counter += 1
         return mg_action, nn_action
-    
+    def apply_constraints(data):
+        total_penalty = 0
+
+    # Example data structure for inputs
+    # data = {
+    #     'P_grid': ..., 'P_gen': ..., 'P_solar': ..., 'P_wind': ..., 'P_load': [...], 'curtailments': [...],
+    #     'P_loss': ..., 'P_min': ..., 'P_max': ..., 'P_ramp_up': ..., 'P_ramp_down': ..., 'mu1': ..., 'mu2': ...,
+    #     'lambda_': ..., 'benefits': [...], 'discomforts': [...], 'weighting_factor': ..., 'rankings': [...],
+    #     'incentive_rate': ..., 'min_rate': ..., 'max_rate': ..., 'budget': ...
+    # }
+
+        total_penalty += power_balance_constraint(data['P_grid'], data['P_gen'], data['P_solar'], data['P_wind'],
+                                                data['P_load'], data['curtailments'], data['P_loss'])
+        total_penalty += generation_limit_constraint(data['P_gen'], data['P_min'], data['P_max'])
+        total_penalty += ramp_rate_constraint(data['P_gen'], data['P_gen_prev'], data['P_ramp_up'], data['P_ramp_down'])
+        total_penalty += curtailment_limit_constraint(data['curtailments'], data['P_load'], data['mu1'], data['mu2'])
+        total_penalty += daily_curtailment_limit(data['curtailments'], sum(data['P_load']), data['lambda_'])
+        total_penalty += consumer_benefit_constraint(data['benefits'], data['discomforts'], data['weighting_factor'])
+        total_penalty += benefit_limit_constraint(data['benefits'], data['rankings'])
+        total_penalty += incentive_rate_constraint(data['incentive_rate'], data['min_rate'], data['max_rate'])
+        total_penalty += budget_limit_constraint(data['incentives'], data['budget'])
+
+        return total_penalty
     def reset(self):
         # init states
         # self.mgt5_p_mw = 0.

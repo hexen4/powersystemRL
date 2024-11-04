@@ -2,11 +2,12 @@
 func:
 - scale_to_mg
 - normalize_state
-- cal_cost
 - extra_reward
 - plot_return
 - plot_pf_results
 - view_profile
+- calculate_wind_shape
+- calculate_f_wind
 '''
 
 import os
@@ -18,7 +19,7 @@ from typing import Dict
 import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
-
+from scipy.special import gamma
 from setting import *
 
 # --- Action Scaling --- [-1,1] -> [min, max]
@@ -134,113 +135,6 @@ def normalize_state(state) -> Dict:
 
     return normalized_state_rnn, normalized_state_fnn
 
-# --- Reward ---
-def cal_costgen(power_gen, **kwargs): # for each action (power generation) -> calc
-    #pcc_p_mw -> The PCC is the point where the microgrid connects to the main grid or utility network. It serves as the interface for exchanging power between the microgrid and the larger grid.
-    cost = A1 * power_gen ** 2 + A2 * power_gen + A3
-    if len(kwargs):
-        ids = kwargs['ids']
-        t = kwargs['t']
-        net = kwargs['net']
-        log_cost_info(cost, t, net=net, ids=ids, pcc_p_mw=power_gen)
-
-    #normalise cost with stored max cost in log_cost?
-    return cost
-
-def cal_costpow(alpha,power_transfer, **kwargs):
-    cost = alpha*power_transfer
-    if len(kwargs):
-        ids = kwargs['ids']
-        t = kwargs['t']
-        net = kwargs['net']
-        log_cost_info(cost, t, net=net, ids=ids, pcc_p_mw=power_transfer)
-
-    return cost
-
-# for each consumer for each hour -> sum 
-def MGO_profit(alpha,curtailed,incentive, **kwargs):
-    if not isinstance(curtailed, (list, np.ndarray)):
-        raise TypeError("Curtailed should be a list or numpy array representing the curtailment of each consumer.")
-    profit = alpha * curtailed - incentive * curtailed
-    if len(kwargs):
-        ids = kwargs['ids']
-        t = kwargs['t']
-        net = kwargs['net']
-        log_cost_info(profit, t, net=net, ids=ids, pcc_p_mw=curtailed)
-
-    return profit
-def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, P_demand, curtailed, P_loss):
-    #P_load is customer demand
-    if not isinstance(P_demand, (list, np.ndarray)):
-        raise TypeError("P_load should be a list or numpy array representing the load demand of each consumer.")
-    if not isinstance(curtailed, (list, np.ndarray)):
-        raise TypeError("Curtailments should be a list or numpy array representing power curtailments for each consumer.")
-    # Ensure both lists have the same length
-    if len(P_demand) != len(curtailed):
-        raise ValueError("P_load and curtailments must have the same length, representing each consumer.")
-    total_supply = P_grid + P_gen + P_solar + P_wind
-    total_demand = sum(P_demand) - sum(curtailed) + P_loss
-    if not np.isclose(total_supply, total_demand, atol=1e-5):
-        penalty = abs(total_supply - total_demand) ** 2  # Apply a penalty based on imbalance
-        return penalty
-    return 0  # No penalty if constraint satisfied
-
-def generation_limit_constraint(P_gen, P_min, P_max):
-    if P_gen < P_min:
-        return (P_min - P_gen) ** 2  # Penalty for being below minimum
-    elif P_gen > P_max:
-        return (P_gen - P_max) ** 2  # Penalty for exceeding maximum
-    return 0
-def ramp_rate_constraint(P_gen, P_gen_prev, P_ramp_up, P_ramp_down):
-    delta = P_gen - P_gen_prev
-    if delta > P_ramp_up:
-        return (delta - P_ramp_up) ** 2
-    elif delta < -P_ramp_down:
-        return (delta + P_ramp_down) ** 2
-    return 0
-def curtailment_limit_constraint(curtailed, P_demand, mu1 = 0, mu2 = 0.6): # TODO need to do for all customemrs
-    if not isinstance(curtailed, (list, np.ndarray)):
-        raise TypeError("Curtailments should be a list or numpy array representing power curtailments for each consumer.")
-    if not isinstance(P_demand, (list, np.ndarray)):
-        raise TypeError("P_demand should be a list or numpy array representing power curtailments for each consumer.")
-    min_curtailment = mu1 * P_demand
-    max_curtailment = mu2 * P_demand
-    if curtailed < min_curtailment:
-        return (min_curtailment - curtailments) ** 2
-    elif curtailed > max_curtailment:
-        return (curtailed - max_curtailment) ** 2
-    return 0
-def daily_curtailment_limit(curtailed, P_demand, lambda_ = 0.4): # TODO for each customer
-    if not isinstance(curtailed, (list, np.ndarray)):
-        raise TypeError("Curtailments should be a list or numpy array representing power curtailments for each consumer.")
-    if not isinstance(P_demand, (list, np.ndarray)):
-        raise TypeError("P_demand should be a list or numpy array representing power curtailments for each consumer.")
-    daily_curtailment = sum(curtailed)
-    max_curtailment = lambda_ * P_demand
-    if daily_curtailment > max_curtailment:
-        return (daily_curtailment - max_curtailment) ** 2
-    return 0
-def consumer_benefit_constraint(benefits, incentive, discomforts, psi = 0.5): # TODO for each customer
-    total_benefit = sum(psi * benefits * incentive - (1 - psi) * discomforts)
-    return max(0, -total_benefit) ** 2  # Penalty if benefit is not enough4
-def benefit_limit_constraint(benefits, rankings): 
-    #consumers with largeer benefits should have higher rankings
-    penalty = 0
-    for j in range(1, len(rankings)):
-        if benefits[rankings[j]] > benefits[rankings[j - 1]]:
-            penalty += (benefits[rankings[j]] - benefits[rankings[j - 1]]) ** 2
-    return penalty
-def incentive_rate_constraint(incentive, market_price, eta = 0.4):
-    if incentive < market_price*eta:
-        return (market_price*eta - incentive) ** 2
-    elif incentive > market_price:
-        return (incentive - market_price) ** 2
-    return 0
-def budget_limit_constraint(incentive, curtailed,budget): #for each customer for each hour
-    product = incentive*curtailed
-    if product > budget:
-        return (product-budget) ** 2  # Penalty if exceeding budget
-    return 0
 
 def extra_reward(nn_bat_p_mw, valid_bat_p_mw):
     # TODO look at paper to see what it does with penality for invalid action
@@ -357,22 +251,30 @@ def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
         logging.info(f'critic loss = {critic_loss}')
 
 
-# TODO change this
-def log_cost_info(transaction_cost, battery_cost, soc_penalty, t, freq=100, **kwargs):
+# must supply kwargs with net, ids, pcc_p_mw     
+def log_cost_info(transaction_cost, t, source='', freq=100, **kwargs):
+    """
+    Logs cost and power flow information at specified time intervals with a source identifier.
+    """
     if t % freq == 0:
-        net = kwargs['net']
-        ids = kwargs['ids']
-        pcc_p_mw = kwargs['pcc_p_mw']
-        p_wt = net.res_sgen['p_mw'].iloc[ids['wt7']].sum()
-        p_pv = net.res_sgen['p_mw'].sum() - p_wt
-        p_bat = net.res_storage['p_mw'].sum()
-        p_load = net.res_load['p_mw'].sum()
-        excess = p_pv + p_wt - p_bat - p_load
+        net = kwargs.get('net', None)
+        ids = kwargs.get('ids', None)
+        pcc_p_mw = kwargs.get('pcc_p_mw', None)
 
-        logging.info('--- Cost ---')
-        logging.info(f'trans: {transaction_cost:.3f}, bat: {battery_cost:.3f}, soc: {soc_penalty:.3f}')
-        logging.info('--- Power flow ---')
-        logging.info(f'pcc = {pcc_p_mw:.3f}, excess = {excess:.3f},  pv = {p_pv:.3f}, wt = {p_wt:.3f}, bat = {p_bat:.3f}, load = {p_load:.3f}')
+        if net is not None and ids is not None and pcc_p_mw is not None:
+            p_wt = net.res_sgen.loc[ids['WT1'], 'p_mw'].sum() if 'WT1' in ids else 0
+            p_pv = net.res_sgen.loc[ids['PV1'], 'p_mw'].sum() if 'PV1' in ids else 0
+            p_cg = net.res_gen['p_mw'].sum()
+            p_load = net.res_load['p_mw'].sum() if 'p_mw' in net.res_load else 0
+            excess = p_pv + p_wt + p_cg - p_load
+
+            logging.info(f'--- {source} Cost ---')
+            logging.info(f'trans: {transaction_cost:.3f}')
+            logging.info(f'--- Power flow from {source} ---')
+            logging.info(f'pcc = {pcc_p_mw:.3f}, excess = {excess:.3f}, '
+                         f'pv = {p_pv:.3f}, wt = {p_wt:.3f}, load = {p_load:.3f}')
+        else:
+            logging.warning("Missing data for logging in log_cost_info. Check 'kwargs' for required keys.")
 
 def log_trans_info(s, a, t, freq=100, **kwargs):
     if t % freq == 0:
@@ -464,8 +366,28 @@ def policy_simple(net, ids, bat5_soc, bat10_soc, bat5_max_e_mwh, bat10_max_e_mwh
     
     return np.array([p_b5, p_b10])
 
-def interval_optimisation(minP,maxP):
-    # TODO implement interval optimisation
-    pass
-    # generator_data should be a DataFrame with time-indexed power profiles 
-    
+def calculate_shape_parameters(mu_h_wind, sigma_h_wind):
+    """
+    Calculate the shape parameters k_w^h and c_w^h for the given mean (mu_h_wind)
+    and standard deviation (sigma_h_wind) of wind speed at time interval h.
+    """
+    # Calculate k_w^h using equation (10)
+    k_h_w = (sigma_h_wind / mu_h_wind) ** (-1.086)
+
+    # Calculate c_w^h using equation (11)
+    c_h_w = mu_h_wind / gamma(1 + 1 / k_h_w)
+
+    return k_h_w, c_h_w
+
+def calculate_f_wind(v_h, mu_h_wind, sigma_h_wind):
+    """
+    Calculate the wind speed probability density function f_wind^h for a given wind speed v_h,
+    mean (mu_h_wind), and standard deviation (sigma_h_wind) at time interval h.
+    """
+    # Calculate shape parameters
+    k_h_w, c_h_w = calculate_shape_parameters(mu_h_wind, sigma_h_wind)
+
+    # Implement the wind speed PDF using equation (9)
+    f_wind_h = (k_h_w / c_h_w) * ((v_h / c_h_w) ** (k_h_w - 1)) * np.exp(-(v_h / c_h_w) ** k_h_w)
+
+    return f_wind_h

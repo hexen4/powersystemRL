@@ -90,13 +90,13 @@ def network_comp():
         pp.create_line_from_parameters(net, c_nf_per_km = 10, max_i_ka = 0.4, from_bus = from_bus, to_bus = to_bus, length_km = 1, r_ohm_per_km=r_ohm, x_ohm_per_km=x_ohm) 
 
     #  gen -> voltage controlled PV nodes. sgen -> no voltage control
-    pp.create_sgen(net, bus=13, p_mw=4.231, q_mvar=0, name="Solar DG")
+    pp.create_sgen(net, bus=13, p_mw=4.231, q_mvar=0, name="PV1")
 
     # Add wind-based DG at Bus 5 (p_mw = p_rated?)
-    pp.create_gen(net, bus=4, p_mw=0.5, vm_pu=1.0, name="Wind DG")
+    pp.create_gen(net, bus=4, p_mw=0.5, vm_pu=1.0, name="WT1")
 
     # Add conventional DG at Bus 12 #min = 35, max = 300, p rated up, p rated down
-    pp.create_gen(net, bus=11, p_mw=0.07, min_p_mw=0.035, max_p_mw=0.3, vm_pu=1.0, name="Conventional DG")
+    pp.create_gen(net, bus=11, p_mw=0.07, min_p_mw=0.035, max_p_mw=0.3, vm_pu=1.0, name="CDG1")
 
     # TODO add storage
     #pp.create_storage(net, bus, p_mw, max_e_mwh, q_mvar=0, sn_mva=nan, soc_percent=nan, min_e_mwh=0.0, name=None, index=None, scaling=1.0, type=None, in_service=True, max_p_mw=nan, min_p_mw=nan, max_q_mvar=nan, min_q_mvar=nan, controllable=nan)

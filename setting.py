@@ -113,6 +113,8 @@ MAX_ACTION = np.array([P_B5_MAX, P_B10_MAX])
 MIN_ACTION = np.array([P_B5_MIN, P_B10_MIN])
 N_ACTION = len(MAX_ACTION)
 
+
+
 # --- Cost Parameters ---
 # TODO change cost parameters
 A1 = 0.0001
@@ -123,10 +125,14 @@ REWARD_INVALID_ACTION = -5e-3
 
 
 ##my variables
-
+PENALTY_FACTOR = 5
 N_NODE = 33
-
-
+PGEN_MIN = 35 #KW
+PGEN_MAX = 300
+PRAMPUP = 70
+PRAMPDOWN = 50
+MB = 0 #daily budget of MGO
+EPSILON = 0.5 #incentive per unit curtailed
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')
     print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')
