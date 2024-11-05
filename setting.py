@@ -113,21 +113,45 @@ MAX_ACTION = np.array([P_B5_MAX, P_B10_MAX])
 MIN_ACTION = np.array([P_B5_MIN, P_B10_MIN])
 N_ACTION = len(MAX_ACTION)
 
+
+
 # --- Cost Parameters ---
 # TODO change cost parameters
-C_PRICE_MAX = 3.
-# C_MGT5 = [100, 1.5]
-# C_MGT9 = [15.8, 2.]
-# C_MGT10 = [100, 1.5]
-C_BAT5_DoD = 0.43
-C_BAT10_DoD = 0.16
-C_SOC_LIMIT = 100
-MAX_COST = C_PRICE_MAX * (P_B5_MAX + P_B10_MAX + P_LOAD_MAX) + \
-        (C_BAT5_DoD + C_BAT10_DoD) * pow(SOC_MAX-SOC_MIN, 2) + \
-        C_SOC_LIMIT
+A1 = 0.0001
+A2 = 0.1032
+A3 = 14.5216
 
 REWARD_INVALID_ACTION = -5e-3
 
+
+##my variables
+WTRATED = 500
+v_opt = 12 
+v_in = 3
+v_coff = 25
+WIND_A = WTRATED / (v_opt**3 - v_in**3)
+WIND_B = v_in**3 / (v_opt**3 - v_in**3)
+
+PENALTY_FACTOR = 5
+EPSILON = 0.5 #incentive per unit curtailed
+N_NODE = 33
+
+PGEN_MIN = 35 #KW
+PGEN_MAX = 300
+PRAMPUP = 70
+PRAMPDOWN = 50
+MB = 0 #daily budget of MGO
+
+NSOLAR = 4231
+Ki = 0.00545
+Kv = 0.1278
+Tot = 45
+Ta = 25
+Isc = 8.95
+Voc = 37.8
+Impp = 8.4
+Vmpp = 31
+FF = (Vmpp*Impp)/(Isc*Voc)
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')
     print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')

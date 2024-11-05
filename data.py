@@ -1,70 +1,58 @@
 import pandas as pd
-import utils
+from utils import *
 from setting import *
+def create_unit_profile(csv_all):
+    """
+    Process and normalize solar, wind, load, and price data from a CSV.
+    """
+    solar_wind_speeds = pd.read_excel('./data/downloaded data/dataexport_20241105T125259.xlsx')
+    # Extract relevant dataframes from the input CSV
+    pv_df = csv_all[['mu_solar(kW/m^2)', 'sigma_solar(kW/m^2)']]
+    pv_df['s_h'] = solar_wind_speeds['Shortwave Radiation'].iloc[5:29].values
+    wt_df = csv_all[['mu_wind(m/s)', 'sigma_wind(m/s)']]
+    wt_df['v_h'] = solar_wind_speeds['Wind Speed'].iloc[5:29].values
+    load_df = csv_all[['hourly_load%']]
+    price_df = csv_all[['price($/MWh)']]
 
-def create_unit_profile(pv_df, wt_df, load_df, price_df):
-    # reshape tables
-    pv_df = pd.pivot_table(pv_df, values='solar_generation_mw', index=['datetime_beginning_ept'], columns=['area'], sort=False)
-    wt_df = pd.pivot_table(wt_df, values='wind_generation_mw', index=['datetime_beginning_ept'], columns=['area'], sort=False)
-    load_df = pd.pivot_table(load_df, values='mw', index=['datetime_beginning_ept'], columns=['load_area'], sort=False)
-    price_df = pd.pivot_table(price_df, values='hrly_da_demand_bid', index=['datetime_beginning_ept'], columns=['area'], sort=False)
+    # calculating wind parameters
+    wt_df['k_h_w'], wt_df['c_h_w'] = zip(*wt_df.apply(lambda row: calculate_shape_parameters(row['mu_wind(m/s)'], row['sigma_wind(m/s)']), axis=1))
+    wt_df['f_wind_h'] = wt_df.apply(lambda row: calculate_f_wind(row['v_h'], row['k_h_w'], row['c_h_w']), axis=1)
+    wt_df['P_wind'] = wt_df['v_h'].apply(calculate_wind_power)
 
-    # scale values
-    for df in [pv_df, wt_df, load_df, price_df]:
-        df /= df.max()
-    print(f'Unit profile: {pv_df.max()}, {wt_df.max()}, {load_df.max()}, {price_df.max()}')
+    # calculating solar parameters
 
-    return pv_df, wt_df, load_df, price_df
+    pv_df['c_h_s'] = pv_df.apply(lambda row: calculate_chs(row['mu_solar(kW/m^2)'], row['sigma_solar(kW/m^2)']), axis=1)
+    pv_df['k_h_s'] = pv_df.apply(lambda row: calculate_khs(row['mu_solar(kW/m^2)'], row['c_h_s']), axis=1)
+    pv_df['f_h_s'] = pv_df.apply(lambda row: calculate_f_solar(row['s_h'],  row['k_h_s'], row['c_h_s']), axis=1)
+    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power)
 
-def create_save_profile(pv_df, wt_df, load_df, price_df):
-    pv_df, wt_df, load_df, price_df =  create_unit_profile(pv_df, wt_df, load_df, price_df)
+    # NORMALIZE DATA
+    pv_df_scaled = normalize_df_column(pv_df, 'P_solar')git reset
+    wt_df_scaled = normalize_df_column(wt_df, 'P_wind')
+    load_df_scaled = normalize_df_column(load_df, 'hourly_load%')
+    price_df_scaled = normalize_df_column(price_df, 'price($/MWh)')
 
-    pv_profile = pd.DataFrame({ 
-        'pv3': pv_df['MIDATL'] * P_PV3_MAX,
-        'pv4': pv_df['MIDATL'] * P_PV4_MAX,
-        'pv5': pv_df['MIDATL'] * P_PV5_MAX,
-        'pv6': pv_df['RFC'] * P_PV6_MAX,
-        'pv8': pv_df['RFC'] * P_PV8_MAX,
-        'pv9': pv_df['RFC'] * P_PV9_MAX,
-        'pv10': pv_df['RTO'] * P_PV10_MAX,
-        'pv11': pv_df['RTO'] * P_PV11_MAX
-    })
-    wt_profile = pd.DataFrame({
-        'wt7': wt_df['MIDATL'] * P_WT7_MAX
-    })
-    load_profile = pd.DataFrame({
-        'load_r1': load_df['AECO'] * P_LOADR1_MAX,
-        'load_r3': load_df['BC'] * P_LOADR3_MAX,
-        'load_r4': load_df['DPLCO'] * P_LOADR4_MAX,
-        'load_r5': load_df['EASTON'] * P_LOADR5_MAX,
-        'load_r6': load_df['JC'] * P_LOADR6_MAX,
-        'load_r8': load_df['ME'] * P_LOADR8_MAX,
-        'load_r10': load_df['PE'] * P_LOADR10_MAX,
-        'load_r11': load_df['PEPCO'] * P_LOADR11_MAX,
-    })
-    price_profile = pd.DataFrame({
-        'price': price_df['PJM_RTO'] * C_PRICE_MAX
-    })
+# Concatenate DataFrames along the columns
+    normalized_profiles = pd.concat([pv_df_scaled, wt_df_scaled, load_df_scaled, price_df_scaled], axis=1)
+    return pv_df,wt_df,load_df,price_df,normalized_profiles
+
+
+def create_save_profile(pv_df,wt_df,load_df,price_df,normalized_profiles):
 
     # create csv files
-    pv_profile.to_csv('./data/profile/pv_profile.csv')
-    wt_profile.to_csv('./data/profile/wt_profile.csv')
-    load_profile.to_csv('./data/profile/load_profile.csv')
-    price_profile.to_csv('./data/profile/price_profile.csv')
+    pv_df.to_csv('./data/derived/pv_profile.csv')
+    wt_df.to_csv('./data/derived/wt_profile.csv')
+    normalized_profiles.to_csv('./data/derived/normalised.csv')
 
 if __name__ == '__main__':
-    pv_df = pd.read_csv('./data/solar_gen.csv')
-    wt_df = pd.read_csv('./data/wind_gen.csv')
-    load_df = pd.read_csv('./data/hrl_load_metered.csv')
-    price_df = pd.read_csv('./data/hrl_dmd_bids.csv')
-    create_save_profile(pv_df, wt_df, load_df, price_df)
+    # Read the solar and wind data CSV generated from the image
+    csv_all = pd.read_csv('./data/downloaded data/solar_wind_data.csv')
+    pv_df,wt_df,load_df,price_df,normalized_profiles  = create_unit_profile(csv_all)
+    # Generate and save profiles
+    create_save_profile(pv_df,wt_df,load_df,price_df,normalized_profiles)
 
-    pv_profile = pd.read_csv('./data/profile/pv_profile.csv')
-    wt_profile = pd.read_csv('./data/profile/wt_profile.csv')
-    load_profile = pd.read_csv('./data/profile/load_profile.csv')
-    price_profile = pd.read_csv('./data/profile/price_profile.csv')
-    # excess = pv_profile.sum(axis=1) + wt_profile.sum(axis=1) - load_profile.sum(axis=1)
-    # surplus = excess[excess > 0]
-    # print(surplus)
-    # print(surplus.shape[0] / pv_profile.shape[0])
-    utils.view_profile(pv_profile, wt_profile, load_profile, price_profile)
+    # Load the generated profiles
+    
+    
+    # Visualize or perform further analysis
+    #view_profile(pv_df,wt_df,load_df,price_df)

@@ -1,12 +1,18 @@
 '''
 func:
+- normalize_df_column
 - scale_to_mg
 - normalize_state
-- cal_cost
 - extra_reward
 - plot_return
 - plot_pf_results
 - view_profile
+- calculate_wind_shape
+- calculate_f_wind
+- calculate_chs
+- calculate_khs
+- beta_pdf_solar
+- calculate_wind_power  
 '''
 
 import os
@@ -18,9 +24,13 @@ from typing import Dict
 import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
-
+from scipy.special import gamma
 from setting import *
 
+def normalize_df_column(df, column_name):
+    col_min = df[column_name].min()
+    col_max = df[column_name].max()
+    return (df[column_name] - col_min) / (col_max - col_min)
 # --- Action Scaling --- [-1,1] -> [min, max]
 def scale_to_mg(nn_action, min_action, max_action):
     nn_action = np.clip(nn_action, -1., 1.)
@@ -134,28 +144,6 @@ def normalize_state(state) -> Dict:
 
     return normalized_state_rnn, normalized_state_fnn
 
-# --- Reward ---
-def cal_cost(price, pcc_p_mw, bat5_soc_now, bat5_soc_prev, bat10_soc_now, bat10_soc_prev, **kwargs):
-    # TODO change cost function
-    transaction_cost = price * pcc_p_mw
-    # mgt_cost = C_MGT5[0] * pow(mgt5_p_mw, 2) + C_MGT5[1] * mgt5_p_mw + \
-    #     C_MGT9[0] * pow(mgt9_p_mw, 2) + C_MGT9[1] * mgt9_p_mw + \
-    #     C_MGT10[0] * pow(mgt10_p_mw, 2) + C_MGT10[1] * mgt10_p_mw
-    battery_cost = C_BAT5_DoD * pow((bat5_soc_now - bat5_soc_prev), 2) + \
-        C_BAT10_DoD * pow((bat10_soc_now - bat10_soc_prev), 2)
-    soc_penalty = C_SOC_LIMIT if ((bat5_soc_now > (1+SOC_TOLERANCE)*SOC_MAX or bat5_soc_now < (1-SOC_TOLERANCE)*SOC_MIN) or 
-        (bat10_soc_now > (1+SOC_TOLERANCE)*SOC_MAX or bat10_soc_now < (1-SOC_TOLERANCE)*SOC_MIN)) else 0
-
-    if len(kwargs):
-        ids = kwargs['ids']
-        t = kwargs['t']
-        net = kwargs['net']
-        log_cost_info(transaction_cost, battery_cost, soc_penalty, t, net=net, ids=ids, pcc_p_mw=pcc_p_mw)
-
-    cost = (transaction_cost + battery_cost) * HOUR_PER_TIME_STEP + soc_penalty 
-    normalized_cost = cost / MAX_COST
-
-    return cost, normalized_cost
 
 def extra_reward(nn_bat_p_mw, valid_bat_p_mw):
     # TODO look at paper to see what it does with penality for invalid action
@@ -226,7 +214,7 @@ def plot_pf_results(dir, start, length):
     plt.ylabel('MW')
     plt.show()
 
-def view_profile(pv_profile, wt_profile, load_profile, price_profile, start=None, length=None):
+def view_profile(pv_profile, wt_profile,load_profile,price_profile, start=None, length=None):
     start = 0 if start is None else start
     length = (len(pv_profile.index)-start) if length is None else length
     pv_p_mw = pv_profile.iloc[start: start+length, :]
@@ -236,6 +224,7 @@ def view_profile(pv_profile, wt_profile, load_profile, price_profile, start=None
 
     # MW and excess profile
     profile_p_mw = pd.concat([pv_p_mw, wt_p_mw, load_p_mw]).iloc[start: start+length, :]
+    profile_p_mw = pd.concat([pv_p_mw, wt_p_mw]).iloc[start: start+length, :]
     excess_profile = pv_p_mw.sum(axis=1) + wt_p_mw.sum(axis=1) - load_p_mw.sum(axis=1)
     excess_profile = pd.DataFrame({'Excess': excess_profile})
 
@@ -253,8 +242,8 @@ def view_profile(pv_profile, wt_profile, load_profile, price_profile, start=None
     load_p_mw.plot(xlabel='hour', ylabel='p_mw', title='Load')
     price_profile.plot(xlabel='hour', ylabel='price', title='Price')
     profile_p_mw.plot(xlabel='hour', ylabel='p_mw', title='Microgrid')
-    ax = excess_profile.plot(xlabel='hour', ylabel='p_mw', title='excess')
-    ax.plot(range(start, start+length), np.zeros((length),))
+    #ax = excess_profile.plot(xlabel='hour', ylabel='p_mw', title='excess')
+    #ax.plot(range(start, start+length), np.zeros((length),))
     plt.show()
 
 # --- Logging ---
@@ -270,21 +259,31 @@ def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
         logging.info(f'actor loss = {actor_loss}')
         logging.info(f'critic loss = {critic_loss}')
 
-def log_cost_info(transaction_cost, battery_cost, soc_penalty, t, freq=100, **kwargs):
-    if t % freq == 0:
-        net = kwargs['net']
-        ids = kwargs['ids']
-        pcc_p_mw = kwargs['pcc_p_mw']
-        p_wt = net.res_sgen['p_mw'].iloc[ids['wt7']].sum()
-        p_pv = net.res_sgen['p_mw'].sum() - p_wt
-        p_bat = net.res_storage['p_mw'].sum()
-        p_load = net.res_load['p_mw'].sum()
-        excess = p_pv + p_wt - p_bat - p_load
 
-        logging.info('--- Cost ---')
-        logging.info(f'trans: {transaction_cost:.3f}, bat: {battery_cost:.3f}, soc: {soc_penalty:.3f}')
-        logging.info('--- Power flow ---')
-        logging.info(f'pcc = {pcc_p_mw:.3f}, excess = {excess:.3f},  pv = {p_pv:.3f}, wt = {p_wt:.3f}, bat = {p_bat:.3f}, load = {p_load:.3f}')
+# must supply kwargs with net, ids, pcc_p_mw     
+def log_cost_info(transaction_cost, t, source='', freq=100, **kwargs):
+    """
+    Logs cost and power flow information at specified time intervals with a source identifier.
+    """
+    if t % freq == 0:
+        net = kwargs.get('net', None)
+        ids = kwargs.get('ids', None)
+        pcc_p_mw = kwargs.get('pcc_p_mw', None)
+
+        if net is not None and ids is not None and pcc_p_mw is not None:
+            p_wt = net.res_sgen.loc[ids['WT1'], 'p_mw'].sum() if 'WT1' in ids else 0
+            p_pv = net.res_sgen.loc[ids['PV1'], 'p_mw'].sum() if 'PV1' in ids else 0
+            p_cg = net.res_gen['p_mw'].sum()
+            p_load = net.res_load['p_mw'].sum() if 'p_mw' in net.res_load else 0
+            excess = p_pv + p_wt + p_cg - p_load
+
+            logging.info(f'--- {source} Cost ---')
+            logging.info(f'trans: {transaction_cost:.3f}')
+            logging.info(f'--- Power flow from {source} ---')
+            logging.info(f'pcc = {pcc_p_mw:.3f}, excess = {excess:.3f}, '
+                         f'pv = {p_pv:.3f}, wt = {p_wt:.3f}, load = {p_load:.3f}')
+        else:
+            logging.warning("Missing data for logging in log_cost_info. Check 'kwargs' for required keys.")
 
 def log_trans_info(s, a, t, freq=100, **kwargs):
     if t % freq == 0:
@@ -375,3 +374,76 @@ def policy_simple(net, ids, bat5_soc, bat10_soc, bat5_max_e_mwh, bat10_max_e_mwh
         # p_mgt10 = 0. if excess > p_b  else min((p_b - excess) * mgt10_ratio, mgt10_op_point)
     
     return np.array([p_b5, p_b10])
+
+def calculate_shape_parameters(mu_h_wind, sigma_h_wind):
+    """
+    Calculate the shape parameters k_w^h and c_w^h for the given mean (mu_h_wind)
+    and standard deviation (sigma_h_wind) of wind speed at time interval h.
+    """
+    # Calculate k_w^h using equation (10)
+    k_h_w = (sigma_h_wind / mu_h_wind) ** (-1.086)
+
+    # Calculate c_w^h using equation (11)
+    c_h_w = mu_h_wind / gamma(1 + 1 / k_h_w)
+
+    return k_h_w, c_h_w
+
+def calculate_f_wind(v_h, k_h_w, c_h_w):
+    """
+    Calculate the wind speed probability density function f_wind^h for a given wind speed v_h,
+    mean (mu_h_wind), and standard deviation (sigma_h_wind) at time interval h.
+    """
+
+    # Implement the wind speed PDF using equation (9)
+    f_wind_h = (k_h_w / c_h_w) * ((v_h / c_h_w) ** (k_h_w - 1)) * np.exp(-(v_h / c_h_w) ** (k_h_w - 1))
+
+    return f_wind_h
+
+def calculate_chs(mu_solar, sigma_solar):
+    """
+    Calculate the parameter ch_s for the Beta distribution based on
+    the mean (mu_solar) and standard deviation (sigma_solar) of solar irradiance.
+    """
+    if sigma_solar == 0 or mu_solar ==0:
+        return 0
+    numerator = (1 - mu_solar) * (((mu_solar * (1 + mu_solar)) / (sigma_solar**2)) - 1)
+    return numerator
+
+def calculate_khs(mu_solar, ch_s):
+    """
+    Calculate the parameter kh_s for the Beta distribution.
+    """
+    return (mu_solar / (1 - mu_solar)) * ch_s
+
+def calculate_f_solar(sh, kh_s,ch_s):
+    """
+    Calculate the PDF of solar irradiance for a given solar irradiance value (sh),
+    mean irradiance (mu_solar), and standard deviation (sigma_solar).
+    """
+    # Calculate ch_s and kh_s
+
+    # Ensure kh_s and ch_s are greater than zero
+    if kh_s <= 0 or ch_s <= 0:
+        return 0
+
+    # Calculate the Beta PDF using the equation (1)
+    term1 = gamma(kh_s + ch_s) / (gamma(kh_s) * gamma(ch_s))
+    pdf_value = term1 * (sh**(kh_s - 1)) * ((1 - sh)**(ch_s - 1))
+
+    return pdf_value
+
+def calculate_wind_power(v_h):
+    if v_h < v_in or v_h > v_coff:
+        return 0
+    elif v_in <= v_h <= v_opt:
+        return WIND_A * (v_h**3) + WIND_B * WTRATED
+    elif v_opt <= v_h <= v_coff:
+        return WTRATED
+    else:
+        return 0
+    
+def calculate_solar_power(s_h):
+    Tc = Ta + s_h*((Tot-20)/0.8)
+    Is = s_h*(Isc + Ki*(Tc-25))
+    Vs = Voc - Kv*Tc
+    return NSOLAR * FF * Vs * Is
