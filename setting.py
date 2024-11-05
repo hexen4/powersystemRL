@@ -125,14 +125,33 @@ REWARD_INVALID_ACTION = -5e-3
 
 
 ##my variables
+WTRATED = 500
+v_opt = 12 
+v_in = 3
+v_coff = 25
+WIND_A = WTRATED / (v_opt**3 - v_in**3)
+WIND_B = v_in**3 / (v_opt**3 - v_in**3)
+
 PENALTY_FACTOR = 5
+EPSILON = 0.5 #incentive per unit curtailed
 N_NODE = 33
+
 PGEN_MIN = 35 #KW
 PGEN_MAX = 300
 PRAMPUP = 70
 PRAMPDOWN = 50
 MB = 0 #daily budget of MGO
-EPSILON = 0.5 #incentive per unit curtailed
+
+NSOLAR = 4231
+Ki = 0.00545
+Kv = 0.1278
+Tot = 45
+Ta = 25
+Isc = 8.95
+Voc = 37.8
+Impp = 8.4
+Vmpp = 31
+FF = (Vmpp*Impp)/(Isc*Voc)
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')
     print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')

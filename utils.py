@@ -1,5 +1,6 @@
 '''
 func:
+- normalize_df_column
 - scale_to_mg
 - normalize_state
 - extra_reward
@@ -8,6 +9,10 @@ func:
 - view_profile
 - calculate_wind_shape
 - calculate_f_wind
+- calculate_chs
+- calculate_khs
+- beta_pdf_solar
+- calculate_wind_power  
 '''
 
 import os
@@ -22,6 +27,10 @@ import tensorflow as tf
 from scipy.special import gamma
 from setting import *
 
+def normalize_df_column(df, column_name):
+    col_min = df[column_name].min()
+    col_max = df[column_name].max()
+    return (df[column_name] - col_min) / (col_max - col_min)
 # --- Action Scaling --- [-1,1] -> [min, max]
 def scale_to_mg(nn_action, min_action, max_action):
     nn_action = np.clip(nn_action, -1., 1.)
@@ -379,15 +388,62 @@ def calculate_shape_parameters(mu_h_wind, sigma_h_wind):
 
     return k_h_w, c_h_w
 
-def calculate_f_wind(v_h, mu_h_wind, sigma_h_wind):
+def calculate_f_wind(v_h, k_h_w, c_h_w):
     """
     Calculate the wind speed probability density function f_wind^h for a given wind speed v_h,
     mean (mu_h_wind), and standard deviation (sigma_h_wind) at time interval h.
     """
-    # Calculate shape parameters
-    k_h_w, c_h_w = calculate_shape_parameters(mu_h_wind, sigma_h_wind)
 
     # Implement the wind speed PDF using equation (9)
-    f_wind_h = (k_h_w / c_h_w) * ((v_h / c_h_w) ** (k_h_w - 1)) * np.exp(-(v_h / c_h_w) ** k_h_w)
+    f_wind_h = (k_h_w / c_h_w) * ((v_h / c_h_w) ** (k_h_w - 1)) * np.exp(-(v_h / c_h_w) ** (k_h_w - 1))
 
     return f_wind_h
+
+def calculate_chs(mu_solar, sigma_solar):
+    """
+    Calculate the parameter ch_s for the Beta distribution based on
+    the mean (mu_solar) and standard deviation (sigma_solar) of solar irradiance.
+    """
+    if sigma_solar == 0 or mu_solar ==0:
+        return 0
+    numerator = (1 - mu_solar) * (((mu_solar * (1 + mu_solar)) / (sigma_solar**2)) - 1)
+    return numerator
+
+def calculate_khs(mu_solar, ch_s):
+    """
+    Calculate the parameter kh_s for the Beta distribution.
+    """
+    return (mu_solar / (1 - mu_solar)) * ch_s
+
+def calculate_f_solar(sh, kh_s,ch_s):
+    """
+    Calculate the PDF of solar irradiance for a given solar irradiance value (sh),
+    mean irradiance (mu_solar), and standard deviation (sigma_solar).
+    """
+    # Calculate ch_s and kh_s
+
+    # Ensure kh_s and ch_s are greater than zero
+    if kh_s <= 0 or ch_s <= 0:
+        return 0
+
+    # Calculate the Beta PDF using the equation (1)
+    term1 = gamma(kh_s + ch_s) / (gamma(kh_s) * gamma(ch_s))
+    pdf_value = term1 * (sh**(kh_s - 1)) * ((1 - sh)**(ch_s - 1))
+
+    return pdf_value
+
+def calculate_wind_power(v_h):
+    if v_h < v_in or v_h > v_coff:
+        return 0
+    elif v_in <= v_h <= v_opt:
+        return WIND_A * (v_h**3) + WIND_B * WTRATED
+    elif v_opt <= v_h <= v_coff:
+        return WTRATED
+    else:
+        return 0
+    
+def calculate_solar_power(s_h):
+    Tc = Ta + s_h*((Tot-20)/0.8)
+    Is = s_h*(Isc + Ki*(Tc-25))
+    Vs = Voc - Kv*Tc
+    return NSOLAR * FF * Vs * Is
