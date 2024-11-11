@@ -116,30 +116,26 @@ N_ACTION = len(MAX_ACTION)
 
 
 # --- Cost Parameters ---
-# TODO change cost parameters
-A1 = 0.0001
-A2 = 0.1032
-A3 = 14.5216
 
 REWARD_INVALID_ACTION = -5e-3
+PENALTY_FACTOR = 5
+EPSILON = 0.5 #incentive per unit curtailed
 
-
-##my variables
-WTRATED = 500
+WTRATED = 500 / 1000 #MW
 v_opt = 12 
 v_in = 3
 v_coff = 25
 WIND_A = WTRATED / (v_opt**3 - v_in**3)
 WIND_B = v_in**3 / (v_opt**3 - v_in**3)
 
-PENALTY_FACTOR = 5
-EPSILON = 0.5 #incentive per unit curtailed
-N_NODE = 33
 
-PGEN_MIN = 35 #KW
-PGEN_MAX = 300
-PRAMPUP = 70
-PRAMPDOWN = 50
+A1 = 0.0001 * 1000 #converted from $/kWh to $/MWh
+A2 = 0.1032 * 1000 
+A3 = 14.5216
+PGEN_MIN = 35 / 1000 #MW
+PGEN_MAX = 300 / 1000
+PRAMPUP = 70 / 1000
+PRAMPDOWN = 50 / 1000
 MB = 0 #daily budget of MGO
 
 NSOLAR = 4231
@@ -152,6 +148,13 @@ Voc = 37.8
 Impp = 8.4
 Vmpp = 31
 FF = (Vmpp*Impp)/(Isc*Voc)
+
+NO_CONSUMERS = 5
+CONSUMER_PARAMS = [[1,1],[2,0.9],[2,0.7],[3,0.6],[3,0.4]]
+TIMESTEPS = range(0,24)
+PEAK_P_DEMAND = 3715 / 1000 #MW
+PEAK_Q_DEMAND = 2300 / 1000 #MVAR
+N_NODE = 33
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')
     print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')

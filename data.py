@@ -1,6 +1,7 @@
 import pandas as pd
 from utils import *
 from setting import *
+from data import *
 def create_unit_profile(csv_all):
     """
     Process and normalize solar, wind, load, and price data from a CSV.
@@ -12,6 +13,13 @@ def create_unit_profile(csv_all):
     wt_df = csv_all[['mu_wind(m/s)', 'sigma_wind(m/s)']]
     wt_df['v_h'] = solar_wind_speeds['Wind Speed'].iloc[5:29].values
     load_df = csv_all[['hourly_load%']]
+
+    # TODO clarify with PH
+    load_df['C1'] = load_df['hourly_load%']*0.05
+    load_df['C2'] = load_df['hourly_load%']*0.05
+    load_df['C3'] = load_df['hourly_load%']*0.1
+    load_df['C4'] = load_df['hourly_load%']*0.2
+    load_df['C5'] = load_df['hourly_load%']*0.3
     price_df = csv_all[['price($/MWh)']]
 
     # calculating wind parameters
@@ -27,7 +35,7 @@ def create_unit_profile(csv_all):
     pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power)
 
     # NORMALIZE DATA
-    pv_df_scaled = normalize_df_column(pv_df, 'P_solar')git reset
+    pv_df_scaled = normalize_df_column(pv_df, 'P_solar')
     wt_df_scaled = normalize_df_column(wt_df, 'P_wind')
     load_df_scaled = normalize_df_column(load_df, 'hourly_load%')
     price_df_scaled = normalize_df_column(price_df, 'price($/MWh)')
@@ -42,6 +50,8 @@ def create_save_profile(pv_df,wt_df,load_df,price_df,normalized_profiles):
     # create csv files
     pv_df.to_csv('./data/derived/pv_profile.csv')
     wt_df.to_csv('./data/derived/wt_profile.csv')
+    load_df.to_csv('./data/derived/load_profile.csv')
+    price_df.to_csv('./data/derived/price_profile.csv')
     normalized_profiles.to_csv('./data/derived/normalised.csv')
 
 if __name__ == '__main__':
@@ -55,4 +65,4 @@ if __name__ == '__main__':
     
     
     # Visualize or perform further analysis
-    #view_profile(pv_df,wt_df,load_df,price_df)
+    view_profile(pv_df,wt_df,load_df,price_df)
