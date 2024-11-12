@@ -16,6 +16,7 @@ func:
 '''
 
 import os
+from pandapower.timeseries import OutputWriter
 import logging
 import pickle
 from pathlib import Path
@@ -400,7 +401,7 @@ def calculate_f_wind(v_h, k_h_w, c_h_w):
     """
 
     # Implement the wind speed PDF using equation (9)
-    f_wind_h = (k_h_w / c_h_w) * ((v_h / c_h_w) ** (k_h_w - 1)) * np.exp(-(v_h / c_h_w) ** (k_h_w - 1))
+    f_wind_h = (k_h_w / c_h_w) * ((v_h / c_h_w) ** (k_h_w - 1)) * np.exp(-(v_h / c_h_w)) ** (k_h_w - 1)
 
     return f_wind_h
 
@@ -452,3 +453,52 @@ def calculate_solar_power(s_h):
     Is = s_h*(Isc + Ki*(Tc-25))
     Vs = Voc - Kv*Tc
     return NSOLAR * FF * Vs * Is
+
+def create_output_writer(net, time_steps, output_dir):
+    ow = OutputWriter(net, time_steps, output_path=output_dir, output_file_type=".xlsx", log_variables=list())
+    ow.log_variable('res_load', 'p_mw')
+    ow.log_variable('res_bus', 'vm_pu')
+    ow.log_variable('res_gen', 'p_mw')
+    ow.log_variable('res_sgen', 'p_mw')
+    return ow
+def plot_results(output_dir):
+    # Plot load power results
+    res_load_file = os.path.join(output_dir, "res_load", "p_mw.xlsx")
+    res_load = pd.read_excel(res_load_file, index_col=0)
+    res_load.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Load power [MW]")
+    plt.title("Load Power Over Time")
+    plt.grid()
+    plt.show()
+
+    # Plot voltage magnitude results
+    res_bus_vm_pu_file = os.path.join(output_dir, "res_bus", "vm_pu.xlsx")
+    res_bus_vm_pu = pd.read_excel(res_bus_vm_pu_file, index_col=0)
+    res_bus_vm_pu.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Voltage magnitude [p.u.]")
+    plt.title("Voltage Magnitude Over Time")
+    plt.grid()
+    plt.show()
+
+    # Plot generator power results
+    res_gen_file = os.path.join(output_dir, "res_gen", "p_mw.xlsx")
+    res_gen = pd.read_excel(res_gen_file, index_col=0)
+    res_gen.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Generator Power [MW]")
+    plt.title("Generator Power Over Time")
+    plt.legend(['WT1','CDG1'],loc='upper right')
+    plt.grid()
+    plt.show()
+
+    # Plot static generator (sgen) power results
+    res_sgen_file = os.path.join(output_dir, "res_sgen", "p_mw.xlsx")
+    res_sgen = pd.read_excel(res_sgen_file, index_col=0)
+    res_sgen.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Solar sGen Power [MW]")
+    plt.title("Solar Gen Power Over Time")
+    plt.grid()
+    plt.show()

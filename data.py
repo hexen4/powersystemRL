@@ -9,9 +9,11 @@ def create_unit_profile(csv_all):
     solar_wind_speeds = pd.read_excel('./data/downloaded data/dataexport_20241105T125259.xlsx')
     # Extract relevant dataframes from the input CSV
     pv_df = csv_all[['mu_solar(kW/m^2)', 'sigma_solar(kW/m^2)']]
-    pv_df['s_h'] = solar_wind_speeds['Shortwave Radiation'].iloc[5:29].values
+    #pv_df['s_h'] = solar_wind_speeds['Shortwave Radiation'].iloc[5:29].values
+    pv_df['s_h'] = pv_df['mu_solar(kW/m^2)']
     wt_df = csv_all[['mu_wind(m/s)', 'sigma_wind(m/s)']]
-    wt_df['v_h'] = solar_wind_speeds['Wind Speed'].iloc[5:29].values
+    #wt_df['v_h'] = solar_wind_speeds['Wind Speed'].iloc[5:29].values
+    wt_df['v_h'] = wt_df['mu_wind(m/s)']
     load_df = csv_all[['hourly_load%']]
 
     # TODO clarify with PH
@@ -32,7 +34,7 @@ def create_unit_profile(csv_all):
     pv_df['c_h_s'] = pv_df.apply(lambda row: calculate_chs(row['mu_solar(kW/m^2)'], row['sigma_solar(kW/m^2)']), axis=1)
     pv_df['k_h_s'] = pv_df.apply(lambda row: calculate_khs(row['mu_solar(kW/m^2)'], row['c_h_s']), axis=1)
     pv_df['f_h_s'] = pv_df.apply(lambda row: calculate_f_solar(row['s_h'],  row['k_h_s'], row['c_h_s']), axis=1)
-    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power)
+    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power) / (10**6)
 
     # NORMALIZE DATA
     pv_df_scaled = normalize_df_column(pv_df, 'P_solar')
