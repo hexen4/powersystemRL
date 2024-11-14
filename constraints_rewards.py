@@ -168,7 +168,7 @@ def incentive_rate_constraint(incentive, market_price, eta=0.4):
         return PENALTY_FACTOR * (incentive - eta * market_price) ** 2
     return 0
 
-def budget_limit_constraint(incentives, curtailed, budget):
+def budget_limit_constraint(incentives, curtailed, budget = MB): # TODO set this
     """
     Ensure that the total incentive payment remains within the budget.
     """

@@ -32,8 +32,10 @@ def normalize_df_column(df, column_name):
     col_min = df[column_name].min()
     col_max = df[column_name].max()
     return (df[column_name] - col_min) / (col_max - col_min)
+
+
 # --- Action Scaling --- [-1,1] -> [min, max]
-def scale_to_mg(nn_action, min_action, max_action):
+def scale_action(nn_action, min_action, max_action):
     nn_action = np.clip(nn_action, -1., 1.)
     return (nn_action + 1) * (max_action - min_action) / 2 + min_action
 
@@ -251,7 +253,70 @@ def view_profile(pv_profile, wt_profile,load_profile,price_profile, start=None, 
     #ax = excess_profile.plot(xlabel='hour', ylabel='p_mw', title='excess')
     #ax.plot(range(start, start+length), np.zeros((length),))
     plt.show()
+def plot_results2(filepath_results):
+    # Load data from profiles
 
+
+    # Calculate start and length for the data range
+    start = 0  # or specify as needed
+    length = len(pv_profile.index) - start
+
+    # Extract profiles within the specified range
+    pv_p_mw = pv_profile.iloc[start: start+length, :]
+    wt_p_mw = wt_profile.iloc[start: start+length, :]
+    load_p_mw = load_profile.iloc[start: start+length, :]
+    price_profile = price_profile.iloc[start: start+length, :]
+
+    # Calculate excess profile
+    excess_profile = pv_p_mw.sum(axis=1) + wt_p_mw.sum(axis=1) - load_p_mw.sum(axis=1)
+    excess_profile = pd.DataFrame({'Excess': excess_profile})
+
+    # Display profile statistics
+    print('--- Profile Statistics ---')
+    print(f'PV Generation:\n Max = {pv_profile.max(numeric_only=True)}, Min = {pv_profile.min(numeric_only=True)}')
+    print(f'Wind Generation:\n Max = {wt_profile.max(numeric_only=True)}, Min = {wt_profile.min(numeric_only=True)}')
+    print(f'Load Demand:\n Max = {load_profile.max(numeric_only=True)}, Min = {load_profile.min(numeric_only=True)}')
+    print(f'Excess Energy:\n Max = {excess_profile.max(numeric_only=True)}, Min = {excess_profile.min(numeric_only=True)}')
+    print(f'Price Profile:\n Max = {price_profile.max(numeric_only=True)}, Min = {price_profile.min(numeric_only=True)}')
+
+    # Plot PV profile
+    pv_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='PV Power Generation (MW)')
+    plt.show()
+
+    # Plot Wind profile
+    wt_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='Wind Power Generation (MW)')
+    plt.show()
+
+    # Plot Load profile
+    load_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='Load Demand (MW)')
+    plt.show()
+
+    # Stacked bar plot for consumer loads
+    plt.figure(figsize=(10, 6))
+    plt.bar(load_p_mw.index, load_p_mw['C1'], label='C1', color='blue')
+    plt.bar(load_p_mw.index, load_p_mw['C2'], bottom=load_p_mw['C1'], label='C2', color='orange')
+    plt.bar(load_p_mw.index, load_p_mw['C3'], bottom=load_p_mw['C1'] + load_p_mw['C2'], label='C3', color='purple')
+    plt.bar(load_p_mw.index, load_p_mw['C4'], bottom=load_p_mw['C1'] + load_p_mw['C2'] + load_p_mw['C3'], label='C4', color='green')
+    plt.bar(load_p_mw.index, load_p_mw['C5'], bottom=load_p_mw['C1'] + load_p_mw['C2'] + load_p_mw['C3'] + load_p_mw['C4'], label='C5', color='red')
+    plt.xlabel('Time Step')
+    plt.ylabel('Power (MW)')
+    plt.title('Stacked Load Demand per Consumer')
+    plt.legend(loc="upper left")
+    plt.show()
+
+    # Plot Price profile
+    price_profile.plot(xlabel='Time Step', ylabel='Price ($/MW)', title='Electricity Price Profile')
+    plt.show()
+
+    # Plot Microgrid power profile (combined PV and Wind generation)
+    profile_p_mw = pd.concat([pv_p_mw, wt_p_mw], axis=1)
+    profile_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='Microgrid Power Generation (PV and Wind)')
+    plt.show()
+
+    # Plot Excess Energy profile
+    excess_profile.plot(xlabel='Time Step', ylabel='Excess Power (MW)', title='Excess Energy (Generation - Load)')
+    plt.axhline(0, color='black', linewidth=0.5, linestyle='--')  # Add a zero line for reference
+    plt.show()
 # --- Logging ---
 def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
     if t is None:
@@ -502,3 +567,22 @@ def plot_results(output_dir):
     plt.title("Solar Gen Power Over Time")
     plt.grid()
     plt.show()
+
+def calculate_discomfort(xjh,pjh):
+    """
+    Calculate discomfort for all customers at once using vectorized operations.
+    
+    Parameters:
+    - xjh: Array or list of curtailed power values for each customer
+    - pjh: Array or list of demand values for each customer
+    
+    Returns:
+    - Array of discomfort values for each customer
+    """
+    # Convert xjh to a NumPy array if it's not already
+    xjh = np.array(xjh)
+    pjh = np.array(pjh)
+    
+    # Calculate discomfort vectorized for all customers
+    discomforts = np.exp(CONSUMER_BETA  * (xjh / pjh)) - 1
+    return discomforts

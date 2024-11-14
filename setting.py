@@ -6,13 +6,14 @@
 '''
 
 import numpy as np
-
+from pandapower.timeseries.data_sources.frame_data import DFData
+import pandas as pd
 # --- Hyperparameters ---
 BATCH_SIZE = 128
 GAMMA = 0.99
 LR_ACTOR = 0.001
 LR_CRITIC = 0.001
-NN_BOUND = 1.
+NN_BOUND = 1
 SEQ_LENGTH= 1
 
 # TD3 only
@@ -44,20 +45,20 @@ HOUR_PER_TIME_STEP = 1
 
 # --- Power Ratings ---
 # PV
-# TODO replace this with uncertain values?
-P_PV3_MAX = 0.3
-P_PV4_MAX = 0.3
-P_PV5_MAX = 0.4
-P_PV6_MAX = 0.4
-P_PV8_MAX = 0.4
-P_PV9_MAX = 0.5
-P_PV10_MAX = 0.5
-P_PV11_MAX = 0.3
-P_PV_MAX_LIST = [P_PV3_MAX, P_PV4_MAX, P_PV5_MAX, P_PV6_MAX, P_PV8_MAX, P_PV9_MAX, P_PV10_MAX, P_PV11_MAX]
 
-# WT
-P_WT7_MAX = 2.5
-P_WT_MAX_LIST = [P_WT7_MAX]
+# P_PV3_MAX = 0.3
+# P_PV4_MAX = 0.3
+# P_PV5_MAX = 0.4
+# P_PV6_MAX = 0.4
+# P_PV8_MAX = 0.4
+# P_PV9_MAX = 0.5
+# P_PV10_MAX = 0.5
+# P_PV11_MAX = 0.3
+# P_PV_MAX_LIST = [P_PV3_MAX, P_PV4_MAX, P_PV5_MAX, P_PV6_MAX, P_PV8_MAX, P_PV9_MAX, P_PV10_MAX, P_PV11_MAX]
+
+# # WT
+# P_WT7_MAX = 2.5
+# P_WT_MAX_LIST = [P_WT7_MAX]
 
 # MGT
 # P_MGT5_MAX = 0.033
@@ -70,47 +71,64 @@ P_WT_MAX_LIST = [P_WT7_MAX]
  
 # Battery
 # TODO ask Pratik about the power ratings
-E_B5_MAX = 3.
-P_B5_MAX = 0.6
-P_B5_MIN = -0.6
+# E_B5_MAX = 3.
+# P_B5_MAX = 0.6
+# P_B5_MIN = -0.6
 
-E_B10_MAX = 1.
-P_B10_MAX = 0.2
-P_B10_MIN = -0.2
+# E_B10_MAX = 1.
+# P_B10_MAX = 0.2
+# P_B10_MIN = -0.2
 
-SOC_MAX = 0.9
-SOC_MIN = 0.1
-SOC_TOLERANCE = 0.01
+# SOC_MAX = 0.9
+# SOC_MIN = 0.1
+# SOC_TOLERANCE = 0.01
 
-# Load
-P_LOADR1_MAX = 0.85
-P_LOADR3_MAX = 0.285
-P_LOADR4_MAX = 0.245
-P_LOADR5_MAX = 0.65
-P_LOADR6_MAX = 0.565
-P_LOADR8_MAX = 0.605
-P_LOADR10_MAX = 0.49
-P_LOADR11_MAX = 0.34
-P_LOAD_MAX_LIST = [P_LOADR1_MAX, P_LOADR3_MAX, P_LOADR4_MAX, P_LOADR5_MAX, P_LOADR6_MAX, P_LOADR8_MAX, P_LOADR10_MAX, P_LOADR11_MAX]
-P_LOAD_MAX = P_LOADR1_MAX + P_LOADR3_MAX + P_LOADR4_MAX + P_LOADR5_MAX + P_LOADR6_MAX + P_LOADR8_MAX + P_LOADR10_MAX + P_LOADR11_MAX
+# # Load
+# P_LOADR1_MAX = 0.85
+# P_LOADR3_MAX = 0.285
+# P_LOADR4_MAX = 0.245
+# P_LOADR5_MAX = 0.65
+# P_LOADR6_MAX = 0.565
+# P_LOADR8_MAX = 0.605
+# P_LOADR10_MAX = 0.49
+# P_LOADR11_MAX = 0.34
+# P_LOAD_MAX_LIST = [P_LOADR1_MAX, P_LOADR3_MAX, P_LOADR4_MAX, P_LOADR5_MAX, P_LOADR6_MAX, P_LOADR8_MAX, P_LOADR10_MAX, P_LOADR11_MAX]
+# P_LOAD_MAX = P_LOADR1_MAX + P_LOADR3_MAX + P_LOADR4_MAX + P_LOADR5_MAX + P_LOADR6_MAX + P_LOADR8_MAX + P_LOADR10_MAX + P_LOADR11_MAX
 
-# PCC
-P_EXCESS_MAX = sum([*P_PV_MAX_LIST, *P_WT_MAX_LIST])
+# # PCC
+# P_EXCESS_MAX = sum([*P_PV_MAX_LIST, *P_WT_MAX_LIST])
 
 # State
+IDX_POWER_GEN = 0
+IDX_SOLAR = 1
+IDX_WIND = 2
+IDX_CUSTOMER_PMW = 3
+IDX_PGRID = 4
+IDX_MARKET_PRICE = 5
+IDX_DISCOMFORT = 6
+IDX_PREV_POWER = 7
+IDX_PREV_CURTAILED = 8
+IDX_PREV_DEMAND = 9
+IDX_PREV_DISCOMFORT = 10
 # N_INTERMITTENT_STATES = len([P_EXCESS_MAX,'price'])
-N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST,'price'])
+#N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST,'price'])
 # N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST, P_EXCESS_MAX,'price'])
-N_CONTROLLABLE_STATES = len([P_B5_MAX, P_B10_MAX]) # TODO change the states here
+#N_CONTROLLABLE_STATES = len([P_B5_MAX, P_B10_MAX]) # TODO change the states here
 # TODO add uncertainty power output of wind + PV
-STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
-STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
+#STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
+#STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
 
 # Action
-# TODO actions only defined for batteries?
-ACTION_IDX = {'p_b5': 0, 'p_b10': 1}
-MAX_ACTION = np.array([P_B5_MAX, P_B10_MAX])
-MIN_ACTION = np.array([P_B5_MIN, P_B10_MIN])
+MAX_ACTION = np.array([100] + [600] * 5)  # [incentive_rate_max, curtail_c1_max, ..., curtail_c5_max]
+MIN_ACTION = np.array([0] + [0] * 5)      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
+ACTION_IDX = {
+    'incentive_rate': 0,          # Incentive rate action at index 0
+    'curtail_C1': 1,               # Curtailment for consumer 1 at index 1
+    'curtail_C2': 2,               # Curtailment for consumer 2 at index 2
+    'curtail_C3': 3,               # Curtailment for consumer 3 at index 3
+    'curtail_C4': 4,               # Curtailment for consumer 4 at index 4
+    'curtail_C5': 5                # Curtailment for consumer 5 at index 5
+}
 N_ACTION = len(MAX_ACTION)
 
 
@@ -150,7 +168,8 @@ Vmpp = 31
 FF = (Vmpp*Impp)/(Isc*Voc)
 
 NO_CONSUMERS = 5
-CONSUMER_PARAMS = [[1,1],[2,0.9],[2,0.7],[3,0.6],[3,0.4]]
+CONSUMER_BETA = [1,2,2,3,3]
+CONSUMER_ZETA = [1,0.9,0.7,0.6,0.4]
 TIMESTEPS = range(0,24)
 PEAK_P_DEMAND = 3715 / 1000 #MW
 PEAK_Q_DEMAND = 2300 / 1000 #MVAR
@@ -225,8 +244,26 @@ line_data = [
 (30, 31, 0.3105, 0.3619),
 (31, 32, 0.3410, 0.5302)]
 
+filepath_results = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived"
+power_data_path_wind = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\wt_profile.csv"
+power_data_path_sun = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\pv_profile.csv"
+power_data_consumers =r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\load_profile.csv"
+
+datasource_wind = pd.read_csv(power_data_path_wind)
+datasource_sun = pd.read_csv(power_data_path_sun)
+datasource_consumers = pd.read_csv(power_data_consumers) * PEAK_P_DEMAND / 100 #individual consumer profiles in percentage
+
+data_source_wind = DFData(datasource_wind)
+data_source_sun = DFData(datasource_sun)
+data_source_consumers = DFData(datasource_consumers)
+
+pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv') # TODO is this correct at this place
+wt_profile_df = pd.read_csv(filepath_results + '/wt_profile.csv')
+load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv')
+price_profile_df = pd.read_csv(filepath_results + '/price_profile.csv')
+
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')
-    print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')
-    print(f'Number of controllable states: {N_CONTROLLABLE_STATES}')
-    print(f'Load max: {P_LOAD_MAX}')
+    #print(f'Number of intermittent states: {N_INTERMITTENT_STATES}')
+    #print(f'Number of controllable states: {N_CONTROLLABLE_STATES}')
+    #print(f'Load max: {P_LOAD_MAX}')

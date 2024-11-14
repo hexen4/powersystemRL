@@ -11,19 +11,7 @@ from collections import defaultdict
 from setting import *
 import matplotlib.pyplot as plt
 import pandapower.timeseries as timeseries
-from pandapower.timeseries.data_sources.frame_data import DFData
 from pandapower.plotting.plotly import simple_plotly
-filepath_results = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived"
-power_data_path_wind = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\wt_profile.csv"
-power_data_path_sun = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\pv_profile.csv"
-power_data_consumers =r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\load_profile.csv"
-datasource_wind = pd.read_csv(power_data_path_wind)
-datasource_sun = pd.read_csv(power_data_path_sun)
-datasource_consumers = pd.read_csv(power_data_consumers) * PEAK_P_DEMAND / 100 #individual consumer profiles in percentage
-
-data_source_wind = DFData(datasource_wind)
-data_source_sun = DFData(datasource_sun)
-data_source_consumers = DFData(datasource_consumers)
 
 def network_comp():
     net = pp.create_empty_network()
@@ -79,13 +67,13 @@ def network_comp():
     print("Time series simulation completed.")
 
     ids = {
-    'pv1': pv1,
-    'wt1': wt1,
-    'cdg1': cdg1,
+    'pv': pv1,
+    'wt': wt1,
+    'dg': cdg1,
     'c1': c1,'c2': c2, 'c3': c3, 'c4': c4, 'c5': c5}
     
     return net, ids, res
 if __name__ == "__main__":  
-    net, ids, res = network_comp()
+    #net, ids, res = network_comp()
     plot_results(filepath_results)
     

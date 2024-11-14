@@ -61,10 +61,6 @@ if __name__ == '__main__':
     csv_all = pd.read_csv('./data/downloaded data/solar_wind_data.csv')
     pv_df,wt_df,load_df,price_df,normalized_profiles  = create_unit_profile(csv_all)
     # Generate and save profiles
-    create_save_profile(pv_df,wt_df,load_df,price_df,normalized_profiles)
-
-    # Load the generated profiles
-    
-    
+    create_save_profile(pv_df,wt_df,load_df,price_df,normalized_profiles)    
     # Visualize or perform further analysis
     view_profile(pv_df,wt_df,load_df,price_df)
