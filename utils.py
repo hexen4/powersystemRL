@@ -216,107 +216,62 @@ def plot_pf_results(dir, start, length):
     plt.xlabel('hour')
     plt.ylabel('MW')
     plt.show()
-
-def view_profile(pv_profile, wt_profile,load_profile,price_profile, start=None, length=None):
-    start = 0 if start is None else start
-    length = (len(pv_profile.index)-start) if length is None else length
-    pv_p_mw = pv_profile.iloc[start: start+length, :]
-    wt_p_mw = wt_profile.iloc[start: start+length, :]
-    load_p_mw = load_profile.iloc[start: start+length, :]
-    price_profile = price_profile.iloc[start: start+length, :]
-
-    # MW and excess profile
-    profile_p_mw = pd.concat([pv_p_mw, wt_p_mw, load_p_mw]).iloc[start: start+length, :]
-    profile_p_mw = pd.concat([pv_p_mw, wt_p_mw]).iloc[start: start+length, :]
-    excess_profile = pv_p_mw.sum(axis=1) + wt_p_mw.sum(axis=1) - load_p_mw.sum(axis=1)
-    excess_profile = pd.DataFrame({'Excess': excess_profile})
-
-    # info
-    print('--- Profile ---')
-    print(f'PV:\n max = {pv_profile.max(numeric_only=True)}, \nmin = {pv_profile.min(numeric_only=True)}')
-    print(f'WT:\n max = {wt_profile.max(numeric_only=True)}, \nmin = {wt_profile.min(numeric_only=True)}')
-    print(f'Load:\n max = {load_profile.max(numeric_only=True)}, \nmin = {load_profile.min(numeric_only=True)}')
-    print(f'Excess:\n max = {excess_profile.max(numeric_only=True)}, \nmin = {excess_profile.min(numeric_only=True)}')
-    print(f'Price:\n max = {price_profile.max(numeric_only=True)}, \nmin = {price_profile.min(numeric_only=True)}')
-
-    # plot
-    pv_p_mw.plot(xlabel='hour', ylabel='p_mw', title='PV')
-    wt_p_mw.plot(xlabel='hour', ylabel='p_mw', title='WT')
-    load_p_mw.plot(xlabel='hour', ylabel='p_mw', title='Load')
-    plt.bar(TIMESTEPS, load_p_mw['C1'], label='C1', color='blue', bottom=None)
-    plt.bar(TIMESTEPS, load_p_mw['C2'], label='C2', color='orange', bottom=load_p_mw['C1'])
-    plt.bar(TIMESTEPS, load_p_mw['C3'], label='C3', color='purple', bottom=load_p_mw['C1'] + load_p_mw['C2'])
-    plt.bar(TIMESTEPS, load_p_mw['C4'], label='C4', color='green', bottom=load_p_mw['C1'] + load_p_mw['C2'] + load_p_mw['C3'])
-    plt.bar(TIMESTEPS, load_p_mw['C5'], label='C5', color='red', bottom=load_p_mw['C1'] + load_p_mw['C2'] + load_p_mw['C3'] + load_p_mw['C4'])
-    price_profile.plot(xlabel='hour', ylabel='price', title='Price')
-    profile_p_mw.plot(xlabel='hour', ylabel='p_mw', title='Microgrid')
-    #ax = excess_profile.plot(xlabel='hour', ylabel='p_mw', title='excess')
-    #ax.plot(range(start, start+length), np.zeros((length),))
-    plt.show()
-def plot_results2(filepath_results):
-    # Load data from profiles
-
-
-    # Calculate start and length for the data range
-    start = 0  # or specify as needed
-    length = len(pv_profile.index) - start
-
-    # Extract profiles within the specified range
-    pv_p_mw = pv_profile.iloc[start: start+length, :]
-    wt_p_mw = wt_profile.iloc[start: start+length, :]
-    load_p_mw = load_profile.iloc[start: start+length, :]
-    price_profile = price_profile.iloc[start: start+length, :]
-
-    # Calculate excess profile
-    excess_profile = pv_p_mw.sum(axis=1) + wt_p_mw.sum(axis=1) - load_p_mw.sum(axis=1)
-    excess_profile = pd.DataFrame({'Excess': excess_profile})
-
-    # Display profile statistics
-    print('--- Profile Statistics ---')
-    print(f'PV Generation:\n Max = {pv_profile.max(numeric_only=True)}, Min = {pv_profile.min(numeric_only=True)}')
-    print(f'Wind Generation:\n Max = {wt_profile.max(numeric_only=True)}, Min = {wt_profile.min(numeric_only=True)}')
-    print(f'Load Demand:\n Max = {load_profile.max(numeric_only=True)}, Min = {load_profile.min(numeric_only=True)}')
-    print(f'Excess Energy:\n Max = {excess_profile.max(numeric_only=True)}, Min = {excess_profile.min(numeric_only=True)}')
-    print(f'Price Profile:\n Max = {price_profile.max(numeric_only=True)}, Min = {price_profile.min(numeric_only=True)}')
-
-    # Plot PV profile
-    pv_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='PV Power Generation (MW)')
+def plot_results(output_dir):
+    # Plot load power results
+    res_load_file = os.path.join(output_dir, "res_load", "p_mw.xlsx")
+    res_load = pd.read_excel(res_load_file, index_col=0)
+    res_load.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Load power [MW]")
+    plt.title("Load Power Over Time")
+    plt.grid()
     plt.show()
 
-    # Plot Wind profile
-    wt_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='Wind Power Generation (MW)')
+    # Plot voltage magnitude results
+    res_bus_vm_pu_file = os.path.join(output_dir, "res_bus", "vm_pu.xlsx")
+    res_bus_vm_pu = pd.read_excel(res_bus_vm_pu_file, index_col=0)
+    res_bus_vm_pu.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Voltage magnitude [p.u.]")
+    plt.title("Voltage Magnitude Over Time")
+    plt.grid()
     plt.show()
 
-    # Plot Load profile
-    load_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='Load Demand (MW)')
+    # Plot generator power results
+    res_gen_file = os.path.join(output_dir, "res_gen", "p_mw.xlsx")
+    res_gen = pd.read_excel(res_gen_file, index_col=0)
+    res_gen.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Generator Power [MW]")
+    plt.title("Generator Power Over Time")
+    plt.legend(['WT1','CDG1'],loc='upper right')
+    plt.grid()
     plt.show()
 
-    # Stacked bar plot for consumer loads
-    plt.figure(figsize=(10, 6))
-    plt.bar(load_p_mw.index, load_p_mw['C1'], label='C1', color='blue')
-    plt.bar(load_p_mw.index, load_p_mw['C2'], bottom=load_p_mw['C1'], label='C2', color='orange')
-    plt.bar(load_p_mw.index, load_p_mw['C3'], bottom=load_p_mw['C1'] + load_p_mw['C2'], label='C3', color='purple')
-    plt.bar(load_p_mw.index, load_p_mw['C4'], bottom=load_p_mw['C1'] + load_p_mw['C2'] + load_p_mw['C3'], label='C4', color='green')
-    plt.bar(load_p_mw.index, load_p_mw['C5'], bottom=load_p_mw['C1'] + load_p_mw['C2'] + load_p_mw['C3'] + load_p_mw['C4'], label='C5', color='red')
-    plt.xlabel('Time Step')
-    plt.ylabel('Power (MW)')
-    plt.title('Stacked Load Demand per Consumer')
-    plt.legend(loc="upper left")
+    # Plot static generator (sgen) power results
+    res_sgen_file = os.path.join(output_dir, "res_sgen", "p_mw.xlsx")
+    res_sgen = pd.read_excel(res_sgen_file, index_col=0)
+    res_sgen.plot()
+    plt.xlabel("Time step")
+    plt.ylabel("Solar sGen Power [MW]")
+    plt.title("Solar Gen Power Over Time")
+    plt.grid()
     plt.show()
 
-    # Plot Price profile
-    price_profile.plot(xlabel='Time Step', ylabel='Price ($/MW)', title='Electricity Price Profile')
+    plt.bar(TIMESTEPS, load_profile_df['C1'], label='C1', color='blue', bottom=None)
+    plt.bar(TIMESTEPS, load_profile_df['C2'], label='C2', color='orange', bottom=load_profile_df['C1'])
+    plt.bar(TIMESTEPS, load_profile_df['C3'], label='C3', color='purple', bottom=load_profile_df['C1'] + load_profile_df['C2'])
+    plt.bar(TIMESTEPS, load_profile_df['C4'], label='C4', color='green', bottom=load_profile_df['C1'] + load_profile_df['C2'] + load_profile_df['C3'])
+    plt.bar(TIMESTEPS, load_profile_df['C5'], label='C5', color='red', bottom=load_profile_df['C1'] + load_profile_df['C2'] + load_profile_df['C3'] + load_profile_df['C4'])
+    plt.legend(title="Consumers", loc="upper left")
+    plt.xlabel("Time step")
+    plt.ylabel("Load Power [MW]")
+    plt.title("Load Power Over Time")
+    plt.show()
+    price_profile_df.plot(xlabel='hour', ylabel='price', title='Price')
     plt.show()
 
-    # Plot Microgrid power profile (combined PV and Wind generation)
-    profile_p_mw = pd.concat([pv_p_mw, wt_p_mw], axis=1)
-    profile_p_mw.plot(xlabel='Time Step', ylabel='Power (MW)', title='Microgrid Power Generation (PV and Wind)')
-    plt.show()
 
-    # Plot Excess Energy profile
-    excess_profile.plot(xlabel='Time Step', ylabel='Excess Power (MW)', title='Excess Energy (Generation - Load)')
-    plt.axhline(0, color='black', linewidth=0.5, linestyle='--')  # Add a zero line for reference
-    plt.show()
 # --- Logging ---
 def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
     if t is None:
@@ -332,30 +287,29 @@ def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
 
 
 # must supply kwargs with net, ids, pcc_p_mw     
-def log_cost_info(transaction_cost, t, source='', freq=100, **kwargs):
+
+def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_action=None, state=None, **kwargs):
     """
-    Logs cost and power flow information at specified time intervals with a source identifier.
+    Logs penalties, profit, and reward information at specified time intervals.
     """
     if t % freq == 0:
-        net = kwargs.get('net', None)
-        ids = kwargs.get('ids', None)
-        pcc_p_mw = kwargs.get('pcc_p_mw', None)
+        penalties = kwargs.get('penalties', {})
+        reward = kwargs.get('reward', None)
 
-        if net is not None and ids is not None and pcc_p_mw is not None:
-            p_wt = net.res_sgen.loc[ids['WT1'], 'p_mw'].sum() if 'WT1' in ids else 0
-            p_pv = net.res_sgen.loc[ids['PV1'], 'p_mw'].sum() if 'PV1' in ids else 0
-            p_cg = net.res_gen['p_mw'].sum()
-            p_load = net.res_load['p_mw'].sum() if 'p_mw' in net.res_load else 0
-            excess = p_pv + p_wt + p_cg - p_load
+        # Log reward, profit, and penalties
+        logging.info(f'--- {source} ---')
+        logging.info(f'Reward: {reward:.3f}')
+        logging.info(f'--- Penalties and Profit ---')
+        for penalty_name, penalty_value in penalties.items():
+            logging.info(f'{penalty_name}: {penalty_value:.3f}')
+        if scaled_action is not None:
+            logging.info(f"Scaled Action: {scaled_action}")
 
-            logging.info(f'--- {source} Cost ---')
-            logging.info(f'trans: {transaction_cost:.3f}')
-            logging.info(f'--- Power flow from {source} ---')
-            logging.info(f'pcc = {pcc_p_mw:.3f}, excess = {excess:.3f}, '
-                         f'pv = {p_pv:.3f}, wt = {p_wt:.3f}, load = {p_load:.3f}')
-        else:
-            logging.warning("Missing data for logging in log_cost_info. Check 'kwargs' for required keys.")
-
+        # Log state
+        if state is not None:
+            logging.info("State:")
+            for idx, value in enumerate(state):
+                logging.info(f"  IDX_{idx}: {value}")
 def log_trans_info(s, a, t, freq=100, **kwargs):
     if t % freq == 0:
         s_seq = s[0]    
@@ -522,51 +476,12 @@ def calculate_solar_power(s_h):
 def create_output_writer(net, time_steps, output_dir):
     ow = OutputWriter(net, time_steps, output_path=output_dir, output_file_type=".xlsx", log_variables=list())
     ow.log_variable('res_load', 'p_mw')
+    ow.log_variable('res_line', 'p_from_mw')
+    ow.log_variable('res_line', 'p_to_mw')
     ow.log_variable('res_bus', 'vm_pu')
     ow.log_variable('res_gen', 'p_mw')
     ow.log_variable('res_sgen', 'p_mw')
     return ow
-def plot_results(output_dir):
-    # Plot load power results
-    res_load_file = os.path.join(output_dir, "res_load", "p_mw.xlsx")
-    res_load = pd.read_excel(res_load_file, index_col=0)
-    res_load.plot()
-    plt.xlabel("Time step")
-    plt.ylabel("Load power [MW]")
-    plt.title("Load Power Over Time")
-    plt.grid()
-    plt.show()
-
-    # Plot voltage magnitude results
-    res_bus_vm_pu_file = os.path.join(output_dir, "res_bus", "vm_pu.xlsx")
-    res_bus_vm_pu = pd.read_excel(res_bus_vm_pu_file, index_col=0)
-    res_bus_vm_pu.plot()
-    plt.xlabel("Time step")
-    plt.ylabel("Voltage magnitude [p.u.]")
-    plt.title("Voltage Magnitude Over Time")
-    plt.grid()
-    plt.show()
-
-    # Plot generator power results
-    res_gen_file = os.path.join(output_dir, "res_gen", "p_mw.xlsx")
-    res_gen = pd.read_excel(res_gen_file, index_col=0)
-    res_gen.plot()
-    plt.xlabel("Time step")
-    plt.ylabel("Generator Power [MW]")
-    plt.title("Generator Power Over Time")
-    plt.legend(['WT1','CDG1'],loc='upper right')
-    plt.grid()
-    plt.show()
-
-    # Plot static generator (sgen) power results
-    res_sgen_file = os.path.join(output_dir, "res_sgen", "p_mw.xlsx")
-    res_sgen = pd.read_excel(res_sgen_file, index_col=0)
-    res_sgen.plot()
-    plt.xlabel("Time step")
-    plt.ylabel("Solar sGen Power [MW]")
-    plt.title("Solar Gen Power Over Time")
-    plt.grid()
-    plt.show()
 
 def calculate_discomfort(xjh,pjh):
     """

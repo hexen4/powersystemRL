@@ -12,8 +12,9 @@ from setting import *
 import matplotlib.pyplot as plt
 import pandapower.timeseries as timeseries
 from pandapower.plotting.plotly import simple_plotly
+from pandapower.plotting.plotly import pf_res_plotly
 
-def network_comp():
+def network_comp(TIMESTEPS = TIMESTEPS):
     net = pp.create_empty_network()
     for i in range(N_NODE):  
         pp.create_bus(net, vn_kv=12.66, name=f"Bus {i}")  
@@ -37,11 +38,12 @@ def network_comp():
     # soc_percent=nan, min_e_mwh=0.0, name=None, index=None, scaling=1.0, type=None, in_service=True, 
     # max_p_mw=nan, min_p_mw=nan, max_q_mvar=nan, min_q_mvar=nan, controllable=nan)
     #add consumers
-    c1= pp.create_load(net, bus= 8, p_mw = 0.05, max_p_mw =PEAK_P_DEMAND, max_q_mw = PEAK_Q_DEMAND, name="C1",controllable=True)
-    c2 = pp.create_load(net, bus= 21, p_mw = 0.05,max_p_mw =PEAK_P_DEMAND, max_q_mw = PEAK_Q_DEMAND, name="C2",controllable=True)
-    c3 = pp.create_load(net, bus= 13, p_mw = 0.05,max_p_mw =PEAK_P_DEMAND, max_q_mw = PEAK_Q_DEMAND, name="C3",controllable=True)
-    c4 = pp.create_load(net, bus= 29, p_mw = 0.05,max_p_mw =PEAK_P_DEMAND, max_q_mw = PEAK_Q_DEMAND, name="C4",controllable=True)
-    c5 = pp.create_load(net, bus= 24, p_mw = 0.05,max_p_mw =PEAK_P_DEMAND, max_q_mw = PEAK_Q_DEMAND, name="C5",controllable=True)
+    consumers = {}
+    for i, bus in enumerate([8, 21, 13, 29, 24], start=1):
+        consumers[f'c{i}'] = pp.create_load(
+            net, bus=bus, p_mw=0.05, max_p_mw=PEAK_P_DEMAND, max_q_mw=PEAK_Q_DEMAND, name=f"C{i}", controllable=True
+        )
+
     for bus, p_kw, q_kvar in load_data:
         pp.create_load(net, bus= bus, p_mw=p_kw / 1000, q_mvar=q_kvar / 1000)
 
@@ -49,31 +51,24 @@ def network_comp():
                  profile_name="P_wind", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_wind)
     ConstControl(net, element='sgen', variable='p_mw', element_index=pv1, 
                  profile_name="P_solar", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_sun)
-    ConstControl(net, element='load', variable='p_mw', element_index=c1, 
-                 profile_name="C1", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_consumers)   
-    ConstControl(net, element='load', variable='p_mw', element_index=c2, 
-                 profile_name="C2", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_consumers)  
-    ConstControl(net, element='load', variable='p_mw', element_index=c3, 
-                 profile_name="C3", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_consumers)  
-    ConstControl(net, element='load', variable='p_mw', element_index=c4, 
-                 profile_name="C4", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_consumers)  
-    ConstControl(net, element='load', variable='p_mw', element_index=c5, 
-                 profile_name="C5", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_consumers)  
-    res = defaultdict(list)
+    for i, element_index in enumerate(consumers.values(), start=1):
+        ConstControl(net, element='load', variable='p_mw', element_index=element_index, 
+                     profile_name=f"C{i}", data_source=data_source_consumers, initial_powerflow=False, recycle=False, run_control=True)  
+    
     # Run power flow analysis
-
-    ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results)  # Step 4: Create output writer
-    timeseries.run_timeseries(net, TIMESTEPS)  # Step 5: Run time series simulation
+    ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results)  
+    timeseries.run_timeseries(net, time_steps = TIMESTEPS) 
     print("Time series simulation completed.")
-
+    line_losses = (net.res_line['p_from_mw'] - net.res_line['p_to_mw']).sum()
     ids = {
     'pv': pv1,
     'wt': wt1,
-    'dg': cdg1,
-    'c1': c1,'c2': c2, 'c3': c3, 'c4': c4, 'c5': c5}
-    
-    return net, ids, res
+    'dg': cdg1}
+    ids.update(consumers)
+
+    return line_losses, net, ids
 if __name__ == "__main__":  
-    #net, ids, res = network_comp()
-    plot_results(filepath_results)
+    line_losses, net, ids = network_comp()
+    #pf_res_plotly(net)
+    #plot_results(filepath_results)
     

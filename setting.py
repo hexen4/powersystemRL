@@ -102,14 +102,18 @@ HOUR_PER_TIME_STEP = 1
 IDX_POWER_GEN = 0
 IDX_SOLAR = 1
 IDX_WIND = 2
-IDX_CUSTOMER_PMW = 3
-IDX_PGRID = 4
-IDX_MARKET_PRICE = 5
-IDX_DISCOMFORT = 6
-IDX_PREV_POWER = 7
-IDX_PREV_CURTAILED = 8
-IDX_PREV_DEMAND = 9
-IDX_PREV_DISCOMFORT = 10
+IDX_CUSTOMER_PMW = np.arange(3, 8)  # Customer power: 5 indices [3, 4, 5, 6, 7]
+IDX_PGRID = 8
+IDX_MARKET_PRICE = 9
+IDX_DISCOMFORT = np.arange(10, 15)  # Discomfort: 5 indices [10, 11, 12, 13, 14]
+IDX_PREV_GENPOWER = 15
+IDX_PREV_CURTAILED = np.arange(16, 21)  # Previous curtailed: 5 indices [16, 17, 18, 19, 20]
+IDX_PREV_DEMAND = np.arange(21, 26)  # Previous demand: 5 indices [21, 22, 23, 24, 25]
+IDX_PREV_DISCOMFORT = np.arange(26, 31)  # Previous discomfort: 5 indices [26, 27, 28, 29, 30]
+IDX_LINE_LOSSES = 31
+
+
+
 # N_INTERMITTENT_STATES = len([P_EXCESS_MAX,'price'])
 #N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST,'price'])
 # N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST, P_EXCESS_MAX,'price'])

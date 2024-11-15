@@ -29,7 +29,7 @@ def MGO_profit(alpha, curtailed, incentive):
     """
     if not isinstance(curtailed, (np.ndarray)):
         curtailed = np.array(curtailed)
-    profit = sum((alpha-incentive) * curtailed)
+    profit = np.sum((alpha-incentive) * curtailed)
     return profit
 
 
