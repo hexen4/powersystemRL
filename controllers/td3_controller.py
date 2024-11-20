@@ -1,6 +1,4 @@
-# TODO what does learn() do? -> update hyperparameters
-# TODO need to add interval optimisation
-# TODO introduce entropy reg.
+# generate action -> q-networks -> target q value -> q-network updates -> policy network soft update
 '''
 class:
 - TD3Agent
@@ -39,8 +37,6 @@ from setting import *
 import utils
 
 class TD3Agent(Controller):
-    # TODO change net
-    # TODO change profiles
     def __init__(self, net, ids, pv_profile, wt_profile, load_profile, price_profile,
         noise_type = 'action', sequence_model_type='none', use_pretrained_sequence_model=False,
         n_epochs=None, training=False,
@@ -82,33 +78,29 @@ class TD3Agent(Controller):
         self.r_norm = utils.NormalizeReward()
 
         # action bounds
-        # TODO change actions
+
         self.max_action = MAX_ACTION
         self.min_action = MIN_ACTION    
 
-        # generator
-        # self.mgt5_id = ids.get('mgt5')
-        # self.mgt5_p_mw = net.sgen.at[self.mgt5_id, 'p_mw']
-        # self.mgt9_id = ids.get('mgt9')
-        # self.mgt9_p_mw = net.sgen.at[self.mgt9_id, 'p_mw']
-        # self.mgt10_id = ids.get('mgt10')
-        # self.mgt10_p_mw = net.sgen.at[self.mgt10_id, 'p_mw']
-
-        # battery
-        self.bat5_id = ids.get('bat5')
-        self.bat5_p_mw = net.storage.at[self.bat5_id, 'p_mw']
-        self.bat5_max_e_mwh = net.storage.at[self.bat5_id, 'max_e_mwh']
-        self.bat10_id = ids.get('bat10')
-        self.bat10_p_mw = net.storage.at[self.bat10_id, 'p_mw']
-        self.bat10_max_e_mwh = net.storage.at[self.bat10_id, 'max_e_mwh']
+        # TODO add battery IDS here when implemented
+        self.pv_id = ids.get('pv')
+        self.pv_p_mw = net.sgen.at[self.pv_id, 'p_mw']
+        self.wt_id = ids.get('wt')
+        self.wt_p_mw = net.gen.at[self.wt_id, 'p_mw']
+        self.cdg_id = ids.get('dg')
+        self.cdg_p_mw = net.gen.at[self.dg_id, 'p_mw']
+        self.c1_id  = id.get('c1')
+        self.c2_id  = id.get('c2')
+        self.c3_id  = id.get('c3')
+        self.c4_id  = id.get('c4')
+        self.c5_id  = id.get('c5')
 
         # internal states
         self.prev_state = None
-        self.bat5_soc = 0.
-        self.bat10_soc = 0.
         self.action = None
         self.rewards = []
         self.costs = []
+        # TODO update history?
         self.history = {
             'price': [],
             # 'mgt5_p_mw': [round(self.mgt5_p_mw, 3)],
@@ -125,24 +117,8 @@ class TD3Agent(Controller):
         self.applied = False
 
         # other elements
-        self.pv3_id = ids.get('pv3')
-        self.pv4_id = ids.get('pv4')
-        self.pv5_id = ids.get('pv5')
-        self.pv6_id = ids.get('pv6')
-        self.pv8_id = ids.get('pv8')
-        self.pv9_id = ids.get('pv9')
-        self.loadr1_id = ids.get('load_r1')
-        self.loadr3_id = ids.get('Load_r3')
-        self.loadr4_id = ids.get('Load_r4')
-        self.loadr5_id = ids.get('Load_r5')
-        self.loadr6_id = ids.get('Load_r6')
-        self.loadr8_id = ids.get('Load_r8')
-        self.loadr10_id = ids.get('Load_r10')
-        self.loadr11_id = ids.get('Load_r11')
-        self.trafo0_id = ids.get('trafo0') # PCC trafo
         
         # buffer
-        # self.buffer = ReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
         self.buffer = PrioritizedReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
 
         # models
@@ -473,29 +449,8 @@ class TD3Agent(Controller):
         mg_action = np.array([bat5_p_mw, bat10_p_mw])
         self.time_step_counter += 1
         return mg_action, nn_action
-    def apply_constraints(data):
-        total_penalty = 0
 
-    # Example data structure for inputs
-    # data = {
-    #     'P_grid': ..., 'P_gen': ..., 'P_solar': ..., 'P_wind': ..., 'P_load': [...], 'curtailments': [...],
-    #     'P_loss': ..., 'P_min': ..., 'P_max': ..., 'P_ramp_up': ..., 'P_ramp_down': ..., 'mu1': ..., 'mu2': ...,
-    #     'lambda_': ..., 'benefits': [...], 'discomforts': [...], 'weighting_factor': ..., 'rankings': [...],
-    #     'incentive_rate': ..., 'min_rate': ..., 'max_rate': ..., 'budget': ...
-    # }
 
-        total_penalty += power_balance_constraint(data['P_grid'], data['P_gen'], data['P_solar'], data['P_wind'],
-                                                data['P_load'], data['curtailments'], data['P_loss'])
-        total_penalty += generation_limit_constraint(data['P_gen'], data['P_min'], data['P_max'])
-        total_penalty += ramp_rate_constraint(data['P_gen'], data['P_gen_prev'], data['P_ramp_up'], data['P_ramp_down'])
-        total_penalty += curtailment_limit_constraint(data['curtailments'], data['P_load'], data['mu1'], data['mu2'])
-        total_penalty += daily_curtailment_limit(data['curtailments'], sum(data['P_load']), data['lambda_'])
-        total_penalty += consumer_benefit_constraint(data['benefits'], data['discomforts'], data['weighting_factor'])
-        total_penalty += benefit_limit_constraint(data['benefits'], data['rankings'])
-        total_penalty += incentive_rate_constraint(data['incentive_rate'], data['min_rate'], data['max_rate'])
-        total_penalty += budget_limit_constraint(data['incentives'], data['budget'])
-
-        return total_penalty
     def reset(self):
         # init states
         # self.mgt5_p_mw = 0.

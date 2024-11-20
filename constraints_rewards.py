@@ -5,10 +5,7 @@ func:
 import numpy as np
 from utils import *
 from setting import *
-# --- Cost Calculation Functions ---
-# TODO need to keep track of prev values -> cummulative sum for optimization
-# TODO curtailed -> numpy array
-def cal_costgen(power_gen): # TODO where is powwer_gen coming from?
+def cal_costgen(power_gen): 
     """
     Calculate the generation cost based on power generation.
     """
@@ -35,7 +32,7 @@ def MGO_profit(alpha, curtailed, incentive):
 
 # --- Constraint Functions ---
 
-def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, P_demand, curtailed, P_loss): # TODO check p_g = p_loss
+def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, P_demand, curtailed, P_loss): 
     """
     Check the power balance constraint and return a penalty if it is not satisfied.
     """
@@ -48,7 +45,7 @@ def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, P_demand, curtailed
         raise ValueError("P_demand and curtailments must have the same length, representing each consumer.")
     
     total_supply = P_grid + P_gen + P_solar + P_wind
-    total_demand = sum(P_demand) - sum(curtailed) + P_loss # TODO sum(p_demand) = total load?
+    total_demand = sum(P_demand) - sum(curtailed) + P_loss 
     if not np.isclose(total_supply, total_demand, atol=1e-5): # TODO check atol
         penalty = abs(total_supply - total_demand) ** 2 # TODO check penalty term
         return PENALTY_FACTOR * penalty

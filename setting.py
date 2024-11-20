@@ -8,13 +8,14 @@
 import numpy as np
 from pandapower.timeseries.data_sources.frame_data import DFData
 import pandas as pd
+
 # --- Hyperparameters ---
 BATCH_SIZE = 128
 GAMMA = 0.99
 LR_ACTOR = 0.001
 LR_CRITIC = 0.001
 NN_BOUND = 1
-SEQ_LENGTH= 1
+SEQ_LENGTH= 3
 
 # TD3 only
 ACTION_NOISE_SCALE = 0.3
@@ -43,61 +44,6 @@ DENSE_DIM_SEQ = 32
 # Environment
 HOUR_PER_TIME_STEP = 1
 
-# --- Power Ratings ---
-# PV
-
-# P_PV3_MAX = 0.3
-# P_PV4_MAX = 0.3
-# P_PV5_MAX = 0.4
-# P_PV6_MAX = 0.4
-# P_PV8_MAX = 0.4
-# P_PV9_MAX = 0.5
-# P_PV10_MAX = 0.5
-# P_PV11_MAX = 0.3
-# P_PV_MAX_LIST = [P_PV3_MAX, P_PV4_MAX, P_PV5_MAX, P_PV6_MAX, P_PV8_MAX, P_PV9_MAX, P_PV10_MAX, P_PV11_MAX]
-
-# # WT
-# P_WT7_MAX = 2.5
-# P_WT_MAX_LIST = [P_WT7_MAX]
-
-# MGT
-# P_MGT5_MAX = 0.033
-# P_MGT9_MAX = 0.212
-# P_MGT10_MAX = 0.033
-# P_MGT5_MIN = 0.
-# P_MGT9_MIN = 0.
-# P_MGT10_MIN = 0.
-# P_MGT_MAX_LIST = [P_MGT5_MAX, P_MGT9_MAX, P_MGT10_MAX]
- 
-# Battery
-# TODO ask Pratik about the power ratings
-# E_B5_MAX = 3.
-# P_B5_MAX = 0.6
-# P_B5_MIN = -0.6
-
-# E_B10_MAX = 1.
-# P_B10_MAX = 0.2
-# P_B10_MIN = -0.2
-
-# SOC_MAX = 0.9
-# SOC_MIN = 0.1
-# SOC_TOLERANCE = 0.01
-
-# # Load
-# P_LOADR1_MAX = 0.85
-# P_LOADR3_MAX = 0.285
-# P_LOADR4_MAX = 0.245
-# P_LOADR5_MAX = 0.65
-# P_LOADR6_MAX = 0.565
-# P_LOADR8_MAX = 0.605
-# P_LOADR10_MAX = 0.49
-# P_LOADR11_MAX = 0.34
-# P_LOAD_MAX_LIST = [P_LOADR1_MAX, P_LOADR3_MAX, P_LOADR4_MAX, P_LOADR5_MAX, P_LOADR6_MAX, P_LOADR8_MAX, P_LOADR10_MAX, P_LOADR11_MAX]
-# P_LOAD_MAX = P_LOADR1_MAX + P_LOADR3_MAX + P_LOADR4_MAX + P_LOADR5_MAX + P_LOADR6_MAX + P_LOADR8_MAX + P_LOADR10_MAX + P_LOADR11_MAX
-
-# # PCC
-# P_EXCESS_MAX = sum([*P_PV_MAX_LIST, *P_WT_MAX_LIST])
-
 # State
 IDX_POWER_GEN = 0
 IDX_SOLAR = 1
@@ -113,15 +59,6 @@ IDX_PREV_DISCOMFORT = np.arange(26, 31)  # Previous discomfort: 5 indices [26, 2
 IDX_LINE_LOSSES = 31
 
 
-
-# N_INTERMITTENT_STATES = len([P_EXCESS_MAX,'price'])
-#N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST,'price'])
-# N_INTERMITTENT_STATES = len([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST, P_EXCESS_MAX,'price'])
-#N_CONTROLLABLE_STATES = len([P_B5_MAX, P_B10_MAX]) # TODO change the states here
-# TODO add uncertainty power output of wind + PV
-#STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
-#STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
-
 # Action
 MAX_ACTION = np.array([100] + [600] * 5)  # [incentive_rate_max, curtail_c1_max, ..., curtail_c5_max]
 MIN_ACTION = np.array([0] + [0] * 5)      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
@@ -135,6 +72,10 @@ ACTION_IDX = {
 }
 N_ACTION = len(MAX_ACTION)
 
+N_INTERMITTENT_STATES = IDX_LINE_LOSSES + 1 
+N_CONTROLLABLE_STATES = len(MAX_ACTION) 
+STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
+STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
 
 
 # --- Cost Parameters ---
@@ -172,16 +113,23 @@ Vmpp = 31
 FF = (Vmpp*Impp)/(Isc*Voc)
 
 NO_CONSUMERS = 5
+ids = {
+'pv': 0,
+'wt': 1,
+'dg': 2}
+for i in range(1, 33):  
+    ids[f'C{i}'] = f'C{i - 1}'  # Map "C1" -> "C0", "C2" -> "C1", etc.
 CONSUMER_BETA = [1,2,2,3,3]
 CONSUMER_ZETA = [1,0.9,0.7,0.6,0.4]
 TIMESTEPS = range(0,24)
 PEAK_P_DEMAND = 3715 / 1000 #MW
 PEAK_Q_DEMAND = 2300 / 1000 #MVAR
-N_NODE = 33
+N_BUS = 33
+
 #(bus,PL,QL)
 load_data = [
 (1, 100, 60),
-(2, 90, 40),
+(2, 90, 40),    
 (3, 120, 80),
 (4, 60, 30),
 (5, 60, 20),
@@ -253,18 +201,16 @@ power_data_path_wind = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\d
 power_data_path_sun = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\pv_profile.csv"
 power_data_consumers =r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\load_profile.csv"
 
-datasource_wind = pd.read_csv(power_data_path_wind)
-datasource_sun = pd.read_csv(power_data_path_sun)
-datasource_consumers = pd.read_csv(power_data_consumers) * PEAK_P_DEMAND / 100 #individual consumer profiles in percentage
-
-data_source_wind = DFData(datasource_wind)
-data_source_sun = DFData(datasource_sun)
-data_source_consumers = DFData(datasource_consumers)
-
-pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv') # TODO is this correct at this place
+pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv')   
 wt_profile_df = pd.read_csv(filepath_results + '/wt_profile.csv')
 load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv')
 price_profile_df = pd.read_csv(filepath_results + '/price_profile.csv')
+
+data_source_wind = DFData(wt_profile_df)
+data_source_sun = DFData(pv_profile_df)
+data_source_consumers = DFData(load_profile_df)    
+
+
 
 if __name__ == '__main__':
     print(f'Number of actions: {N_ACTION}')

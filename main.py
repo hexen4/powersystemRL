@@ -3,7 +3,7 @@ Main program file.
 
 func:
 - train_ppo
-- train_td3
+- train_TCSAC
 - test
 - baseline
 '''
@@ -18,11 +18,12 @@ import pandapower as pp
 import pandapower.timeseries as ts
 from pandapower.timeseries.data_sources.frame_data import DFData
 from pandapower.timeseries.output_writer import OutputWriter
-
+from microgrid_env import MicrogridEnv
 import utils
 from network_comp import *
 from controllers.baseline_controller import RandomControl, SimpleControl
 from controllers.td3_controller import TD3Agent
+from controllers.TCSAC_controller import TCSACAgent
 #from controllers.ppo_controller import PPOAgent
 from setting import *
 
@@ -81,19 +82,23 @@ from setting import *
     # utils.plot_ep_values(ep_cost_list, train_length, n_epochs, ylabel='Cost')
 
 
-def train_td3(n_runs, n_epochs, start, train_length, pv_profile, wt_profile, load_profile, price_profile,
+def train_TCSAC(n_runs, n_epochs, start, train_length, pv_profile, wt_profile, load_profile, price_profile,
     verbose=True, sequence_model_type='rnn', use_pretrained_sequence_model=False, 
     noise_type='action', retrain=False, run=1):
     # env
     assert(start >= 0 and start < pv_profile.shape[0])
     assert(train_length >= 0 and train_length <= pv_profile.shape[0] - start)
     time_steps = range(start, start + train_length)
-    pv_ds = DFData(pv_profile.iloc[start: start+train_length])
-    wt_ds = DFData(wt_profile.iloc[start: start+train_length])
-    load_ds = DFData(load_profile.iloc[start: start+train_length])
-
+    net, ids = network_comp()
+    env = MicrogridEnv(
+        net=net, 
+        ids=ids, 
+        initial_state=initial_state, 
+        w1=w1, 
+        w2=w2, 
+        H=train_length)
     # history
-    history_dir = os.path.join('.', 'history', 'train', 'TD3')
+    history_dir = os.path.join('.', 'history', 'train', 'TCSAC')
     if os.path.isdir(history_dir):
         shutil.rmtree(history_dir)
 
@@ -101,9 +106,8 @@ def train_td3(n_runs, n_epochs, start, train_length, pv_profile, wt_profile, loa
     ep_return_list = np.zeros((n_runs, n_epochs))
     ep_cost_list = np.zeros((n_runs, n_epochs))
     for run in range(n_runs):
-        net, ids = network_comp() 
-        pp.plotting.simple_plot(net, respect_switches=False, line_width=1.0, bus_size=1.0, ext_grid_size=1.0, trafo_size=1.0, plot_loads=False, plot_sgens=False, load_size=1.0, sgen_size=1.0, switch_size=2.0, switch_distance=1.0, plot_line_switches=False, scale_size=True, bus_color='b', line_color='grey', trafo_color='k', ext_grid_color='y', switch_color='k', library='igraph', show_plot=True, ax=None)
-        agent = TD3Agent(net, ids, pv_profile, wt_profile, load_profile, price_profile,
+        
+        agent = TCSACAgent(net, ids, pv_profile, wt_profile, load_profile, price_profile,
             training=True, n_epochs=n_epochs,
             sequence_model_type=sequence_model_type, use_pretrained_sequence_model=use_pretrained_sequence_model, 
             buffer_size=BUFFER_SIZE, noise_type=noise_type, batch_size=BATCH_SIZE)
@@ -168,7 +172,7 @@ def test(n_runs, start, test_length, pv_profile, wt_profile, load_profile, price
     # agent
     #agent = PPOAgent(net, ids, pv_profile, wt_profile, load_profile, price_profile, sequence_model_type, training=False)
     #agent.load(run)
-    agent = TD3Agent(net, ids, pv_profile, wt_profile, load_profile, price_profile,
+    agent = TCSACAgent(net, ids, pv_profile, wt_profile, load_profile, price_profile,
             training=False, sequence_model_type=sequence_model_type)
     agent.load_models(run=run)
 
@@ -214,7 +218,7 @@ def test(n_runs, start, test_length, pv_profile, wt_profile, load_profile, price
 if __name__ == '__main__':
     # --- configurations ---
     logging.basicConfig(level=logging.INFO)
-    algo = 'td3' # TODO find out what sequence_model_type does
+    algo = 'TCSAC' 
     sequence_model_type = 'rnn' # ['none', 'conv1d', 'rnn', 'transformer']
     sequence_length = 1 if (sequence_model_type == 'none') else SEQ_LENGTH
 
@@ -235,19 +239,13 @@ if __name__ == '__main__':
     log = True
     log_path = os.path.join('.', 'pf_res', algo, sequence_model_type)
     log_path_baseline = os.path.join('.', 'pf_res', 'baseline', 'simple')
-    # TODO change profiles
-    # --- profile ---
-    pv_profile = pd.read_csv('./data/profile/pv_profile.csv')
-    wt_profile = pd.read_csv('./data/profile/wt_profile.csv')
-    load_profile = pd.read_csv('./data/profile/load_profile.csv')
-    price_profile = pd.read_csv('./data/profile/price_profile.csv')
 
     # --- train, test ---
     #train_ppo(n_train_runs, n_epochs, train_start, train_length, 
     #    pv_profile, wt_profile, load_profile, price_profile, sequence_model_type)
 
-    train_td3(n_runs=n_train_runs, n_epochs=n_epochs, start=train_start, train_length=train_length,
-         pv_profile=pv_profile, wt_profile=wt_profile, load_profile=load_profile, price_profile=price_profile,
+    train_TCSAC(n_runs=n_train_runs, n_epochs=n_epochs, start=train_start, train_length=train_length,
+         pv_profile=pv_profile_df, wt_profile=wt_profile_df, load_profile=load_profile_df, price_profile=price_profile_df,
          sequence_model_type=sequence_model_type, use_pretrained_sequence_model=use_pretrained_sequence_model, noise_type=noise_type)
 
     # test(n_runs=n_test_runs, start=test_start, test_length=test_length, 

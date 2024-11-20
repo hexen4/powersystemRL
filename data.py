@@ -15,13 +15,13 @@ def create_unit_profile(csv_all):
     #wt_df['v_h'] = solar_wind_speeds['Wind Speed'].iloc[5:29].values
     wt_df['v_h'] = wt_df['mu_wind(m/s)']
     load_df = csv_all[['hourly_load%']]
+    load_pl_values = [item[1] for item in load_data]  # Second element is PL (100% load)
+    # Multiply each row in load_df with load_pl_values
+    load_df = load_df["hourly_load%"].apply(lambda x: [x * pl / 100 for pl in load_pl_values])
 
-    # TODO clarify with PH
-    load_df['C1'] = load_df['hourly_load%']*0.05
-    load_df['C2'] = load_df['hourly_load%']*0.05
-    load_df['C3'] = load_df['hourly_load%']*0.1
-    load_df['C4'] = load_df['hourly_load%']*0.2
-    load_df['C5'] = load_df['hourly_load%']*0.3
+    # Convert the list of scaled loads to a DataFrame
+    load_df= pd.DataFrame(load_df.tolist(), columns=[f"C{i}" for i in range(len(load_pl_values))])
+
     price_df = csv_all[['price($/MWh)']]
 
     # calculating wind parameters
@@ -39,7 +39,7 @@ def create_unit_profile(csv_all):
     # NORMALIZE DATA
     pv_df_scaled = normalize_df_column(pv_df, 'P_solar')
     wt_df_scaled = normalize_df_column(wt_df, 'P_wind')
-    load_df_scaled = normalize_df_column(load_df, 'hourly_load%')
+    load_df_scaled = normalize_df_column(load_df, load_df.columns)
     price_df_scaled = normalize_df_column(price_df, 'price($/MWh)')
 
 # Concatenate DataFrames along the columns
@@ -62,5 +62,3 @@ if __name__ == '__main__':
     pv_df,wt_df,load_df,price_df,normalized_profiles  = create_unit_profile(csv_all)
     # Generate and save profiles
     create_save_profile(pv_df,wt_df,load_df,price_df,normalized_profiles)    
-    # Visualize or perform further analysis
-    view_profile(pv_df,wt_df,load_df,price_df)

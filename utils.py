@@ -1,19 +1,41 @@
-'''
-func:
+"""
+Function List:
 - normalize_df_column
-- scale_to_mg
+- scale_action
+- update_mean_var_count_from_moments
+- NormalizeAction
+    - normalize
+    - tf_normalize
+- NormalizeObservation
+    - normalize
+    - save
+    - load
+- NormalizeReward
+    - normalize
+- RunningMeanStd
+    - update
+    - update_from_moments
 - normalize_state
 - extra_reward
-- plot_return
+- plot_ep_values
 - plot_pf_results
-- view_profile
-- calculate_wind_shape
+- plot_results
+- log_actor_critic_info
+- log_calc_rewards
+- log_trans_info
+- get_excess
+- policy_simple
+- calculate_shape_parameters
 - calculate_f_wind
 - calculate_chs
 - calculate_khs
-- beta_pdf_solar
-- calculate_wind_power  
-'''
+- calculate_f_solar
+- calculate_wind_power
+- calculate_solar_power
+- create_output_writer
+- calculate_discomfort
+"""
+
 
 import os
 from pandapower.timeseries import OutputWriter
@@ -258,16 +280,16 @@ def plot_results(output_dir):
     plt.grid()
     plt.show()
 
-    plt.bar(TIMESTEPS, load_profile_df['C1'], label='C1', color='blue', bottom=None)
-    plt.bar(TIMESTEPS, load_profile_df['C2'], label='C2', color='orange', bottom=load_profile_df['C1'])
-    plt.bar(TIMESTEPS, load_profile_df['C3'], label='C3', color='purple', bottom=load_profile_df['C1'] + load_profile_df['C2'])
-    plt.bar(TIMESTEPS, load_profile_df['C4'], label='C4', color='green', bottom=load_profile_df['C1'] + load_profile_df['C2'] + load_profile_df['C3'])
-    plt.bar(TIMESTEPS, load_profile_df['C5'], label='C5', color='red', bottom=load_profile_df['C1'] + load_profile_df['C2'] + load_profile_df['C3'] + load_profile_df['C4'])
-    plt.legend(title="Consumers", loc="upper left")
-    plt.xlabel("Time step")
-    plt.ylabel("Load Power [MW]")
-    plt.title("Load Power Over Time")
-    plt.show()
+    # plt.bar(TIMESTEPS, load_profile_df['C1'], label='C1', color='blue', bottom=None)
+    # plt.bar(TIMESTEPS, load_profile_df['C2'], label='C2', color='orange', bottom=load_profile_df['C1'])
+    # plt.bar(TIMESTEPS, load_profile_df['C3'], label='C3', color='purple', bottom=load_profile_df['C1'] + load_profile_df['C2'])
+    # plt.bar(TIMESTEPS, load_profile_df['C4'], label='C4', color='green', bottom=load_profile_df['C1'] + load_profile_df['C2'] + load_profile_df['C3'])
+    # plt.bar(TIMESTEPS, load_profile_df['C5'], label='C5', color='red', bottom=load_profile_df['C1'] + load_profile_df['C2'] + load_profile_df['C3'] + load_profile_df['C4'])
+    # plt.legend(title="Consumers", loc="upper left")
+    # plt.xlabel("Time step")
+    # plt.ylabel("Load Power [MW]")
+    # plt.title("Load Power Over Time")
+    # plt.show()
     price_profile_df.plot(xlabel='hour', ylabel='price', title='Price')
     plt.show()
 
@@ -284,9 +306,6 @@ def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
         logging.info('--- Learn ---')
         logging.info(f'actor loss = {actor_loss}')
         logging.info(f'critic loss = {critic_loss}')
-
-
-# must supply kwargs with net, ids, pcc_p_mw     
 
 def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_action=None, state=None, **kwargs):
     """
