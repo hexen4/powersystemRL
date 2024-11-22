@@ -2,25 +2,25 @@
 '''
 class:
 - TD3Agent
-    - adapt_param_noise()
-    - adjust_action_noise()
-    - calculate_distance()
-    - calculate_reward()
-    - control_step()
-    - get_state()
-    - is_converged()
-    - learn()
-    - load_models()
-    - model_info()
-    - perturb_policy()
-    - policy()
-    - reset()
-    - save_models()
-    - update_actor()
-    - update_critics()
-    - update_sequence_model()
-    - update_target_networks()
-    - time_step()
+    - adapt_param_noise() not needed
+    - adjust_action_noise() do?
+    - calculate_distance() not needed
+    - calculate_reward() done
+    - control_step() done
+    - get_state() done
+    - is_converged() do
+    - learn() ??
+    - load_models() done for me 
+    - model_info() done for me
+    - perturb_policy() not done
+    - policy() do 
+    - reset() done
+    - save_models() done for me
+    - update_actor() not done 
+    - update_critics() not done
+    - update_sequence_model() not done 
+    - update_target_networks() not done
+    - time_step() done
 '''
 import logging
 import os
@@ -50,7 +50,7 @@ class TD3Agent(Controller):
         self.price_profile = price_profile
         self.state_seq_shape = STATE_SEQ_SHAPE
         self.state_fnn_shape = STATE_FNN_SHAPE
-        self.n_action = N_ACTION
+        self.n_action = N_CONTROLLABLE_STATES
         self.use_pretrained_sequence_model = use_pretrained_sequence_model
         self.training = training
         self.noise_type = noise_type
@@ -82,7 +82,6 @@ class TD3Agent(Controller):
         self.max_action = MAX_ACTION
         self.min_action = MIN_ACTION    
 
-        # TODO add battery IDS here when implemented
         self.pv_id = ids.get('pv')
         self.pv_p_mw = net.sgen.at[self.pv_id, 'p_mw']
         self.wt_id = ids.get('wt')
@@ -100,7 +99,7 @@ class TD3Agent(Controller):
         self.action = None
         self.rewards = []
         self.costs = []
-        # TODO update history?
+
         self.history = {
             'price': [],
             # 'mgt5_p_mw': [round(self.mgt5_p_mw, 3)],
@@ -132,8 +131,6 @@ class TD3Agent(Controller):
             self.critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
             self.target_critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
             self.target_critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-            # TODO add third critic
-            # TODO add 3 actors??
         # else:
         #     # sequence model
         #     self.sequence_model = SequenceModel(sequence_model_type, name='sequence_model')
@@ -183,105 +180,7 @@ class TD3Agent(Controller):
         d = tf.math.sqrt(d)
         return d
      
-    def calculate_reward(self, net, t): # TODO implement below code
-# class MicrogridEnv(gym.Env):
-#     def __init__(self, H, J, alpha, r, a1, a2, a3, w1, w2):
-#         super(MicrogridEnv, self).__init__()
-#         self.H = H  # Number of timesteps
-#         self.J = J  # Number of consumers
-#         self.alpha = alpha  # Grid power cost coefficient (array of length H)
-#         self.r = r  # Curtailment compensation rate (array of length H)
-#         self.a1, self.a2, self.a3 = a1, a2, a3  # Coefficients for F2
-#         self.w1, self.w2 = w1, w2  # Objective function weights
-        
-#         # Accumulators for the objective components
-#         self.F1_total = 0
-#         self.F2_total = 0
-#         self.F3_total = 0
-#         self.current_timestep = 0
-
-#     def reset(self):
-#         # Reset accumulators and timestep counter
-#         self.F1_total = 0
-#         self.F2_total = 0
-#         self.F3_total = 0
-#         self.current_timestep = 0
-#         # Reset the environment state (for Gym compatibility)
-#         return self._get_initial_state()
-
-#     def step(self, action):
-#         # Calculate components F1, F2, F3 for the current timestep
-#         P_Grid, P_g, P_solar, P_wind, curtailments = self._calculate_current_values(action)
-
-#         # F1: Grid power cost for current timestep
-#         F1_h = self.alpha[self.current_timestep] * P_Grid
-#         self.F1_total += F1_h
-
-#         # F2: Fuel cost for conventional DG
-#         F2_h = self.a1 * (P_g ** 2) + self.a2 * P_g + self.a3
-#         self.F2_total += F2_h
-
-#         # F3: Profit from curtailment compensation for MGO
-#         F3_h = sum(self.alpha[self.current_timestep] * curtailments[j] - self.r[self.current_timestep] * curtailments[j]
-#                    for j in range(self.J))
-#         self.F3_total += F3_h
-
-#         # Calculate the reward (using the objective function, F)
-#         F = self.w1 * (self.F1_total + self.F2_total) - self.w2 * self.F3_total
-#         reward = -F  # Reward might be the negative of the objective to represent minimization
-
-#         # Increment the timestep
-#         self.current_timestep += 1
-
-#         # Check if the episode is done (e.g., reached the end of the horizon H)
-#         done = self.current_timestep >= self.H
-
-#         # Return the current state, reward, done flag, and any additional info
-#         next_state = self._get_next_state()
-#         return next_state, reward, done, {}
-
-#     def _calculate_current_values(self, action):
-#         # Placeholder for method that calculates P_Grid, P_g, P_solar, P_wind, and curtailments
-#         # based on the action and current state of the environment.
-#         P_Grid = action.get('P_Grid', 0)
-#         P_g = action.get('P_g', 0)
-#         P_solar = action.get('P_solar', 0)
-#         P_wind = action.get('P_wind', 0)
-#         curtailments = action.get('curtailments', [0] * self.J)
-#         return P_Grid, P_g, P_solar, P_wind, curtailments
-
-#     def _get_initial_state(self):
-#         # Define the initial state of the environment
-#         return np.zeros(self.J + 2)  # Placeholder for the initial state representation
-
-#     def _get_next_state(self):
-#         # Define the transition logic for the next state
-#         return np.zeros(self.J + 2)  # Placeholder for the next state representation
-
-        price = self.price_profile['price'][t - 1]
-        cost, normalized_cost = utils.cal_cost(
-            price=price,
-            pcc_p_mw=-net.res_trafo.at[self.trafo0_id, 'p_lv_mw'],
-            # mgt5_p_mw=self.mgt5_p_mw,
-            # mgt9_p_mw=self.mgt9_p_mw,
-            # mgt10_p_mw=self.mgt10_p_mw,
-            bat5_soc_now=self.bat5_soc,
-            bat5_soc_prev=self.prev_state[1][0],
-            bat10_soc_now=self.bat10_soc,
-            bat10_soc_prev=self.prev_state[1][1],
-            # ids=self.ids,
-            # t=t,
-            # net=net
-            )
-        reward = -normalized_cost
-
-        # invalid action penalty
-        # nn_bat_p_mw = self.action * np.array([P_B5_MAX, P_B10_MAX])
-        # valid_bat_p_mw = np.array([self.bat5_p_mw, self.bat10_p_mw])
-        # extra_reward = utils.extra_reward(nn_bat_p_mw, valid_bat_p_mw)
-        # reward += extra_reward
-
-        return cost, reward
+ 
 
     def control_step(self, net):
         # net.sgen.at[self.mgt5_id, 'p_mw'] = self.mgt5_p_mw
@@ -318,38 +217,6 @@ class TD3Agent(Controller):
             # update networks
             self.learn()
 
-    def get_state(self, net, t): # TODO i think this is where the state variables are defined
-        state_seq = np.zeros(self.state_seq_shape)
-        state_fnn = np.zeros(self.state_fnn_shape)
-
-        for i in range(SEQ_LENGTH):
-            state_seq[i, 0] = self.pv_profile['pv3'][t + i]
-            state_seq[i, 1] = self.pv_profile['pv4'][t + i]
-            state_seq[i, 2] = self.pv_profile['pv5'][t + i]
-            state_seq[i, 3] = self.pv_profile['pv6'][t + i]
-            state_seq[i, 4] = self.pv_profile['pv8'][t + i]
-            state_seq[i, 5] = self.pv_profile['pv9'][t + i]
-            state_seq[i, 6] = self.pv_profile['pv10'][t + i]
-            state_seq[i, 7] = self.pv_profile['pv11'][t + i]
-            state_seq[i, 8] = self.wt_profile['wt7'][t + i]
-            state_seq[i, 9] = self.load_profile['load_r1'][t + i]
-            state_seq[i, 10] = self.load_profile['load_r3'][t + i]
-            state_seq[i, 11] = self.load_profile['load_r4'][t + i]
-            state_seq[i, 12] = self.load_profile['load_r5'][t + i]
-            state_seq[i, 13] = self.load_profile['load_r6'][t + i]
-            state_seq[i, 14] = self.load_profile['load_r8'][t + i]
-            state_seq[i, 15] = self.load_profile['load_r10'][t + i]
-            state_seq[i, 16] = self.load_profile['load_r11'][t + i]
-            # state_seq[i, 17] = utils.get_excess(self.pv_profile, self.wt_profile, self.load_profile, t+i)
-            state_seq[i, 17] = self.price_profile['price'][t + i]
-
-            # state_seq[i, 0] = utils.get_excess(self.pv_profile, self.wt_profile, self.load_profile, t+i)
-            # state_seq[i, 1] = self.price_profile['price'][t + i]
-        
-        state_fnn[0] = self.bat5_soc
-        state_fnn[1] = self.bat10_soc
-
-        return state_seq, state_fnn
 
     def is_converged(self, net) -> bool:
         return self.applied

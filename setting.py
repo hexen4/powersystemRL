@@ -60,7 +60,7 @@ IDX_LINE_LOSSES = 31
 
 
 # Action
-MAX_ACTION = np.array([100] + [600] * 5)  # [incentive_rate_max, curtail_c1_max, ..., curtail_c5_max]
+MAX_ACTION = np.array([100] + [0.6] * 5)  # [incentive_rate_max, curtail_c1_max, ..., curtail_c5_max]
 MIN_ACTION = np.array([0] + [0] * 5)      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
 ACTION_IDX = {
     'incentive_rate': 0,          # Incentive rate action at index 0
@@ -70,10 +70,9 @@ ACTION_IDX = {
     'curtail_C4': 4,               # Curtailment for consumer 4 at index 4
     'curtail_C5': 5                # Curtailment for consumer 5 at index 5
 }
-N_ACTION = len(MAX_ACTION)
-
 N_INTERMITTENT_STATES = IDX_LINE_LOSSES + 1 
 N_CONTROLLABLE_STATES = len(MAX_ACTION) 
+N_ACTION = len(MAX_ACTION)
 STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
 STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
 
@@ -127,7 +126,7 @@ PEAK_Q_DEMAND = 2300 / 1000 #MVAR
 N_BUS = 33
 
 #(bus,PL,QL)
-load_data = [
+initial_load_data = [
 (1, 100, 60),
 (2, 90, 40),    
 (3, 120, 80),
@@ -160,6 +159,9 @@ load_data = [
 (30, 150, 70),
 (31, 210, 100),
 (32, 60, 40)]
+
+load_data = [(bus, PL / 1000, QL / 1000) for bus, PL, QL in initial_load_data]
+
 
 #(to_bus, from_bus, r_ohm(total), x_ohm)
 line_data = [
@@ -203,12 +205,12 @@ power_data_consumers =r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\da
 
 pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv')   
 wt_profile_df = pd.read_csv(filepath_results + '/wt_profile.csv')
-load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv')
+load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv') / 1000 
 price_profile_df = pd.read_csv(filepath_results + '/price_profile.csv')
 
 data_source_wind = DFData(wt_profile_df)
 data_source_sun = DFData(pv_profile_df)
-data_source_consumers = DFData(load_profile_df)    
+data_source_consumers_original = DFData(load_profile_df)    
 
 
 

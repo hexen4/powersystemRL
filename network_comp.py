@@ -15,7 +15,7 @@ import pandapower.timeseries as timeseries
 from pandapower.plotting.plotly import simple_plotly
 from pandapower.plotting.plotly import pf_res_plotly
 
-def network_comp(TIMESTEPS = TIMESTEPS, curtailed = np.zeros(5)):
+def network_comp(TIMESTEPS = TIMESTEPS):
     net = pp.create_empty_network()
     for i in range(N_BUS): #zero-indexed  
         pp.create_bus(net, vn_kv=12.66, name=f"Bus {i}")  
@@ -28,27 +28,19 @@ def network_comp(TIMESTEPS = TIMESTEPS, curtailed = np.zeros(5)):
 
     #  gen -> voltage controlled PV nodes. sgen -> no voltage control
     pv1 = pp.create_sgen(net, bus=13, p_mw=4.231, q_mvar=0, name="PV1", index = 0)
-
-    # Add wind-based DG at Bus 5 (p_mw = p_rated?)
     wt1 = pp.create_gen(net, bus=4, p_mw=0.5, min_p_mw = 0, max_p_mw = WTRATED, vm_pu=1.0, name="WT1", index = 1)
-
-    # Add conventional DG at Bus 12 #min = 35, max = 300, p rated up, p rated down
     cdg1 = pp.create_gen(net, bus=11, p_mw=0.07, min_p_mw=PGEN_MIN, max_p_mw=PGEN_MAX, vm_pu=1.0, name="CDG1", index = 2)
 
-    # TODO add storage
-    #pp.create_storage(net, bus, p_mw, max_e_mwh, q_mvar=0, sn_mva=nan, 
-    # soc_percent=nan, min_e_mwh=0.0, name=None, index=None, scaling=1.0, type=None, in_service=True, 
-    # max_p_mw=nan, min_p_mw=nan, max_q_mvar=nan, min_q_mvar=nan, controllable=nan)
-    
     consumers = {}
+    single_step = True
 
-    for i, bus in enumerate(range(0, 32)):  # Range for 0-based indexing
+    for i, bus in enumerate(range(32)):
         consumers[f'C{i}'] = pp.create_load(
             net, 
             bus=bus,  # Use 0-based indexing for buses
             p_mw=0.05, 
-            max_p_mw=load_data[i][1] / 1000,  
-            max_q_mw=load_data[i][2] / 1000,  
+            max_p_mw=load_data[i][1],  
+            max_q_mw=load_data[i][2],  
             name=f"C{i}",  
             index = f"C{i}", 
             controllable=True
@@ -59,15 +51,31 @@ def network_comp(TIMESTEPS = TIMESTEPS, curtailed = np.zeros(5)):
                  profile_name="P_solar", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_sun)
     for i, element_index in enumerate(consumers.values(), start = 1):
         ConstControl(net, element='load', variable='p_mw', element_index=element_index, 
-                     profile_name=f"Customer_{i}", data_source=data_source_consumers, initial_powerflow=False, recycle=False, run_control=True)  
+                     profile_name=f"Customer_{i}", data_source=data_source_consumers_original, initial_powerflow=False, recycle=False, run_control=True)  
     # Run power flow analysis
-    ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results)  
-    timeseries.run_timeseries(net, time_steps = TIMESTEPS)
-    print("Time series simulation completed.")
+
+
+    print("Starting simulation with control loop...")
+    pp.control.run_control(
+        net,
+        ctrl_variables=None,  
+        max_iter=30,          
+        continue_on_lf_divergence=False  
+    )
+    print("Control loop simulation completed.")
+
+    # Calculate line losses
     line_losses = (net.res_line['p_from_mw'] - net.res_line['p_to_mw']).sum()
 
-    net.gen.at[cdg1, 'p_mw'] = line_losses
+    if not single_step: 
+        ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results)  
+        timeseries.run_timeseries(net, time_steps = TIMESTEPS)
+        print("Time series simulation completed.")
+        line_losses = (net.res_line['p_from_mw'] - net.res_line['p_to_mw']).sum()
 
+        net.gen.at[cdg1, 'p_mw'] = line_losses
+
+    
     return line_losses, net
 if __name__ == "__main__":  
     line_losses, net = network_comp()

@@ -10,12 +10,10 @@ from gym import spaces
 from network_comp import network_comp
 from collections import deque
 class MicrogridEnv():
-    def __init__(self, net, ids, initial_state, w1, w2,H = len(TIMESTEPS), J = NO_CONSUMERS, buffer = 5): #what should i put here?   
-        #super(MicrogridEnv, self).__init__() # TODO wtf is this?
+    def __init__(self, net, ids, initial_state, w1, w2,H = len(TIMESTEPS), J = NO_CONSUMERS, buffer = 5):  
         self.H = H  # Number of timesteps (planning horizon)
         self.J = J  # Number of active consumers
         self.ids = ids
-        self.curtailment_indices = [6, 19, 11, 27, 22]
         self.current_timestep = 0
 
         self.w1, self.w2 = w1, w2  # Weights for objectives
@@ -28,36 +26,14 @@ class MicrogridEnv():
         self.buffer = buffer
 
         self.initial_state = initial_state 
-        self.action_space = spaces.Box(low=-1, high=1, shape=N_ACTION, dtype=np.float32)  #shape of action
-        self.N_OBS = IDX_LINE_LOSSES + 1  # Observation space dimension
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.N_OBS,1), dtype=np.float32)  # shape of  state
+        self.action_space = spaces.Box(low=-1, high=1, shape=(N_CONTROLLABLE_STATES,1), dtype=np.float32)  #shape of action
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(N_ACTION,1), dtype=np.float32)  # shape of  state
 
         self.market_prices = price_profile_df.to_numpy()
         self.original_datasource_consumers = load_profile_df
         self.datasource_consumers = self.original_datasource_consumers.copy()
         self.DfData_consumers = DFData(self.datasource_consumers)
     
-    def apply_curtailment(self, curtailed_values, timestep, curtailed_indices):
-        """
-        Apply curtailment to specific consumer columns at the given timestep.
-
-        Args:
-        - curtailed_values: List of curtailed values for each consumer.
-        - timestep: Current timestep (row index).
-        - curtailed_indices: List of column indices representing consumers to curtail.
-
-        Updates:
-        - Modifies self.datasource_consumers in-place.
-        - Creates a new DFData object and assigns it to self.data_source_consumers.
-        """
-        for index, curtailed_value in zip(curtailed_indices, curtailed_values):
-            # Subtract curtailed value and ensure no negative values
-            self.datasource_consumers.iloc[timestep, index] = max(
-                self.datasource_consumers.iloc[timestep, index] - curtailed_value, 0
-            )
-
-        # Update the DFData object with the new dataframe
-        self.DfData_consumers = DFData(self.datasource_consumers)
         
     def step(self, action):
         #action [(power_curtailed)x5, incentive rate]
@@ -67,16 +43,15 @@ class MicrogridEnv():
         # Update state based on the action taken
         assert self.action_space.contains(action), f"Action {action} is out of bounds!"
         scaled_action = scale_action(action)  
-        curtailed_values = action[:-1]
-        self.apply_curtailment(curtailed_values, self.current_timestep)
 
         self.state = self.update_state(scaled_action) #need to do this for st+1 ->. IC at t = 0
         assert self.observation_space.contains(self.state), f"State {self.state} is out of bounds!"
-
+    
         reward = self._calculate_reward(action, self.state) 
         self.reward_history.append(reward)
-
+        self.last_time_step = self.current_timestep
         self.current_timestep += 1
+        self.applied = False
         done = self.current_timestep >= self.H
 
         return self.state, reward, done, {} # TODO make sure reward cumultative in next func.
@@ -122,7 +97,7 @@ class MicrogridEnv():
         next_state = [0] * self.N_OBS
 
         # Fetch network response values based on the action
-        line_losses, net, ids = network_comp(self.DfData_consumers,self.current_timestep)
+        line_losses, net, ids = network_comp(TIMESTEPS = self.current_timestep)
 
         curtailed = np.array((action[:-1]))
         P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy()
@@ -167,6 +142,7 @@ class MicrogridEnv():
         self.reward_history = []
         self.datasource_consumers = self.original_datasource_consumers.copy()
         self.data_source_consumers = DFData(self.datasource_consumers)
+        self.applied = False
         return self.state
 
     def close(self):
