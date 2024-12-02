@@ -12,7 +12,7 @@ class:
     - load_models() done for me 
     - model_info() done for me
     - perturb_policy() not done (entropy)
-    - policy() not done 
+    - policy() done (samples mean and std from heavy sampling function, and reparam trick)
     - reset() done
     - save_models() done for me
     - update() not done 
@@ -29,10 +29,10 @@ import numpy as np
 
 import tensorflow as tf
 import keras as keras
-#from tensorflow.keras.optimizers import Adam for testing need later
+#from keras.optimizers import Adam 
 from pandapower.control.basic_controller import Controller
-from controllers.models import ActorMuModel, CriticQModel, SequenceModel, get_mu_actor, get_q_critic
-from controllers.buffer import ReplayBuffer, PrioritizedReplayBuffer
+from controllers.models import ActorMuModel, CriticQModel, SequenceModel, get_mu_actor, get_q_critic, get_pi_actor
+from controllers.buffer import ReplayBuffer, PrioritizedReplayBuffer, ComprehensivePrioritizedReplayBuffer
 from setting import *
 import utils
 
@@ -52,7 +52,7 @@ class TD3Agent(Controller):
 
         self.state_seq_shape = STATE_SEQ_SHAPE
         self.state_fnn_shape = STATE_FNN_SHAPE
-        self.n_action = N_CONTROLLABLE_STATES
+        self.n_action = N_ACTION
 
         self.use_pretrained_sequence_model = use_pretrained_sequence_model
         self.training = training
@@ -63,7 +63,6 @@ class TD3Agent(Controller):
         self.n_epochs = n_epochs
         self.update_freq = UPDATE_FREQ
         self.update_times = UPDATE_TIMES
-        self.warmup = WARMUP
         self.delay = delay
         self.gamma = gamma
         self.batch_size = batch_size
@@ -86,43 +85,35 @@ class TD3Agent(Controller):
         # internal states
         self.prev_state = None
         self.action = None
-        self.timestep = TIMESTEPS
         self.applied = False
 
         
         # buffer
-        self.buffer = PrioritizedReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
+        self.buffer = ComprehensivePrioritizedReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
 
         # models
         self.sequence_model_type = sequence_model_type
-        if self.sequence_model_type == 'none': 
-            # actor critic
-            self.actor = get_mu_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel(self.n_action))
-            self.perturbed_actor = get_mu_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel(self.n_action))
-            self.target_actor = get_mu_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel(self.n_action))
-            self.critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-            self.critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-            self.target_critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-            self.target_critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-            # TODO add third critic
-            # TODO add 3 actors??
-        else: #evals to this
+        
+        # actor critic
+        self.actor = get_pi_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel())
+        self.target_actor = get_pi_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel())
+
+        self.critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+        self.critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+        self.critic3 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+
+        self.target_critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+        self.target_critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+        self.target_critic3 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+        if self.sequence_model_type != 'none': 
             # sequence model
             self.sequence_model = SequenceModel(sequence_model_type, name='sequence_model')
             self.sequence_model.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
 
-            # actor critic
-            self.actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
-            self.perturbed_actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
-            self.target_actor = get_mu_actor(self.sequence_model, ActorMuModel(self.n_action))
-            self.critic1 = get_q_critic(self.sequence_model, CriticQModel())
-            self.critic2 = get_q_critic(self.sequence_model, CriticQModel())
-            self.target_critic1 = get_q_critic(self.sequence_model, CriticQModel())
-            self.target_critic2 = get_q_critic(self.sequence_model, CriticQModel())
-
         self.actor.compile(optimizer=Adam(learning_rate=lr_actor, epsilon=1e-5))
         self.critic1.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
         self.critic2.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
+        self.critic3.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
 
     def control_step(self, net, line_losses):
         if not self.applied:
@@ -152,10 +143,11 @@ class TD3Agent(Controller):
         self.actor.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'actor_weights'))
         self.critic1.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic1_weights'))
         self.critic2.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic2_weights'))
+        self.critic3.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic3_weights'))
         self.target_actor.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_actor_weights'))
         self.target_critic1.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic1_weights'))
         self.target_critic2.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic2_weights'))
-
+        self.target_critic3.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic3_weights'))
     def model_info(self):
         self.actor.summary()
         self.critic1.summary()
@@ -166,58 +158,39 @@ class TD3Agent(Controller):
     
     def policy(self, net, t, state):
         # network outputs
-        if self.timestep < self.warmup and self.training:
-            # warmup
-            nn_action = np.random.uniform(low=-NN_BOUND, high=NN_BOUND, size=(self.n_action,))
-        else:
-            state_seq, state_fnn = self.obs_norm.normalize(state, update=False)
-            # add batch index
-            tf_state_seq = tf.expand_dims(tf.convert_to_tensor(state_seq, dtype=tf.float32), axis=0) 
-            tf_state_fnn = tf.expand_dims(tf.convert_to_tensor(state_fnn, dtype=tf.float32), axis=0)
+        state_seq, state_fnn = self.obs_norm.normalize(state, update=False) #watch out for state
+        # add batch dimension
+        tf_state_seq = tf.expand_dims(tf.convert_to_tensor(state_seq, dtype=tf.float32), axis=0) 
+        tf_state_fnn = tf.expand_dims(tf.convert_to_tensor(state_fnn, dtype=tf.float32), axis=0)
 
-            if self.training:
-                # param noise
-                if self.noise_type == 'param':
-                    tf_action = self.perturbed_actor([tf_state_seq, tf_state_fnn], training=self.training)
-                    tf_action = tf.squeeze(tf_action, axis=0) # remove batch index
-                    nn_action = tf_action.numpy()
-                # action noise
-                else:
-                    tf_action = self.actor([tf_state_seq, tf_state_fnn], training=self.training)
-                    tf_action = tf.squeeze(tf_action, axis=0) # remove batch index
-                    nn_action = tf_action.numpy()
-                    if t % 100 == 0:
-                        print(f'nn outputs = {nn_action}')
-                    nn_action += np.random.normal(loc=0., scale=self.action_noise_scale, size=(self.n_action,))
-                # testing
-            else:
-                tf_action = self.actor([tf_state_seq, tf_state_fnn], training=self.training)
-                tf_action = tf.squeeze(tf_action, axis=0) # remove batch index
-                nn_action = tf_action.numpy()
-            nn_action = np.clip(nn_action, -NN_BOUND, NN_BOUND)
+        action_mean, action_std = self.actor([tf_state_seq, tf_state_fnn], training=self.training)
+        if self.training:
+            # reparam trick
+            epsilon = tf.random.normal(shape=action_mean.shape, mean=0.0, stddev=1.0)
+            nn_action = action_mean + np.multiply(epsilon, action_std)  # a_t = μ + σ * ε
+        else: #TODO do we need to call deterministic actor mu?
+        # Deterministic action during testing (mean of the distribution)
+            nn_action = action_mean
+        
+        nn_action = tf.squeeze(nn_action, axis=0).numpy()
+        # Add exploration noise during training
+        # if self.training and self.noise_type == 'action':
+        #     nn_action += np.random.normal(loc=0., scale=self.action_noise_scale, size=(self.n_action,))
+        nn_action = np.clip(nn_action, -NN_BOUND, NN_BOUND)
 
-        # mg action
-        p_b5_min = max(P_B5_MIN, (SOC_MIN - self.bat5_soc) * self.bat5_max_e_mwh / HOUR_PER_TIME_STEP)
-        p_b5_max = min(P_B5_MAX, (SOC_MAX - self.bat5_soc) * self.bat5_max_e_mwh / HOUR_PER_TIME_STEP)
-        p_b10_min = max(P_B10_MIN, (SOC_MIN - self.bat10_soc) * self.bat10_max_e_mwh / HOUR_PER_TIME_STEP)
-        p_b10_max = min(P_B10_MAX, (SOC_MAX - self.bat10_soc) * self.bat10_max_e_mwh / HOUR_PER_TIME_STEP)
-
-        # invalid action clipping
-        # mgt5_p_mw, mgt9_p_mw, mgt10_p_mw, bat5_p_mw, bat10_p_mw = utils.scale_to_mg(nn_action, self.max_action, self.min_action)
-        # bat5_p_mw = np.clip(bat5_p_mw, p_b5_min, p_b5_max)
-        # bat10_p_mw = np.clip(bat10_p_mw, p_b10_min, p_b10_max)
-
-        # invalid action masking
+        # Extract curtailment actions and incentive rate from nn_acti   on
+        curtailment_actions = nn_action[:-1]  
+        incentive_rate_action = nn_action[-1]  
 
 
-        self.min_action[ACTION_IDX.get('p_b5')] = p_b5_min
-        self.min_action[ACTION_IDX.get('p_b10')] = p_b10_min
-        self.max_action[ACTION_IDX.get('p_b5')] = p_b5_max
-        self.max_action[ACTION_IDX.get('p_b10')] = p_b10_max
-        bat5_p_mw, bat10_p_mw = utils.scale_to_mg(nn_action, self.min_action, self.max_action)
+        scaled_curtailments = utils.scale_action(curtailment_actions, MIN_ACTION[:-1], MAX_ACTION[:-1])
+        scaled_incentives = utils.scale_action(incentive_rate_action, MIN_ACTION[-1], MAX_ACTION[-1])
+        # Combine scaled curtailments and incentive rate into mg_action
+        mg_action = np.concatenate((scaled_curtailments, [scaled_incentives]))
 
-        mg_action = np.array([bat5_p_mw, bat10_p_mw])
+        # Increment the timestep
         self.timestep += 1
+
         return mg_action, nn_action
     
     def save_models(self, dir='model_weights', run=1):
@@ -225,9 +198,11 @@ class TD3Agent(Controller):
         self.actor.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'actor_weights'))
         self.critic1.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic1_weights'))
         self.critic2.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic2_weights'))
+        self.critic3.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic3_weights'))
         self.target_actor.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_actor_weights'))
         self.target_critic1.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic1_weights'))
         self.target_critic2.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic2_weights'))
+        self.target_critic3.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic2_weights'))
 
     def update(self):
         # sample

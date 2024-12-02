@@ -3,6 +3,7 @@ class:
     - TransformerEncoder
     - ActorModel
     - CriticModel
+    - Find out what get_pi, get_q does
 '''
 
 import tensorflow as tf
@@ -12,8 +13,8 @@ import tensorflow as tf
 import keras as keras
 from keras import layers
 import torch
+from keras import Sequential
 #import tensorflow.keras.layers as layers
-
 from setting import *
 
 class TransformerEncoder(layers.Layer):
@@ -74,16 +75,15 @@ class SequenceModel(keras.Model):
         return state_seq
 
 class ActorMuModel(keras.Model):
-    # TODO change architecture
-    def __init__(self, n_action, **kwargs):
+    def __init__(self, n_action = N_ACTION, **kwargs):
         super().__init__()
         # self.dense_proj = get_dense_proj_fnn()
         self.concat = layers.Concatenate()
-        self.fc = keras.Sequential([
+        self.fc = Sequential([
             layers.LayerNormalization(),
-            layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
+            layers.Dense(128, activation='relu', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
             layers.LayerNormalization(),
-            layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
+            layers.Dense(64, activation='relu', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
             layers.LayerNormalization(),
         ]) 
 
@@ -98,48 +98,50 @@ class ActorMuModel(keras.Model):
         return action
 
 class ActorPiModel(keras.Model):
-    def __init__(self, n_action, logstd_init=0., **kwargs):
+    def __init__(self, n_action = N_ACTION, logstd_init=0., **kwargs):
         super().__init__()
         # self.dense_proj = get_dense_proj_fnn(activation='tanh')
         self.concat = layers.Concatenate()
         self.fc = keras.Sequential([
-            layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
-            layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
+            layers.LayerNormalization(),
+            layers.Dense(128, activation='relu', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
+            layers.LayerNormalization(),
+            layers.Dense(64, activation='relu', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
+            layers.LayerNormalization(),
         ]) 
         self.action_mean = layers.Dense(n_action, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))
         
-        self.action_logstd = tf.Variable(logstd_init * tf.ones(n_action), trainable=True)
+        self.action_logstd = tf.Variable(logstd_init * tf.ones(n_action), trainable=True) #trainable param. for exploration. have another look
     
     def call(self, state_seq, state_fnn):
-        # state_fnn = self.dense_proj(state_fnn)
         state = self.concat([state_seq, state_fnn])
         state = self.fc(state)
         action_mean = self.action_mean(state)
 
-        action_std = tf.math.exp(self.action_logstd)
+        action_std = tf.math.exp(self.action_logstd) #this may cause instability? clip if needed
         return action_mean, action_std
 
-class CriticQModel(keras.Model):
-    def __init__(self, **kwargs):
-        super().__init__()
-        # self.dense_proj_fnn = get_dense_proj_fnn()
-        # self.dense_proj_a = get_dense_proj_a()
-        self.concat = layers.Concatenate()
-        self.dense = keras.Sequential([
-            layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
-            torch.nn.utils.spectral_norm(layers.Dense(64, activation='tanh', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001))),
-        ])
-        self.q = layers.Dense(1)
+    class CriticQModel(keras.Model):
+        def __init__(self, **kwargs):
+            super().__init__()
+            # self.dense_proj_fnn = get_dense_proj_fnn()
+            # self.dense_proj_a = get_dense_proj_a()
+            self.concat = layers.Concatenate()
+            self.dense = keras.Sequential([
+                layers.Dense(256, activation='relu', kernel_initializer=tf.random_uniform_initializer(minval=-0.001, maxval=0.001)),
+                layers.Dense(128, activation = 'relu', kernel_initializer = tf.random_uniform_initializer(minval=-0.001, maxval=0.001))
+            ])
+            self.q = layers.Dense(1)
 
-    def call(self, state_seq, state_fnn, action):
-        # state_fnn = self.dense_proj_fnn(state_fnn)
-        # action = self.dense_proj_a(action)
-        state_action = self.concat([state_seq, state_fnn, action])
-        state_action = self.dense(state_action)
-        q_value = self.q(state_action)
+        def call(self, state_seq, state_fnn, action):
+            # state_fnn = self.dense_proj_fnn(state_fnn)
+            # action = self.dense_proj_a(action)
+            state_action = self.concat([state_seq, state_fnn, action])
+            state_action = self.dense(state_action)
+            q_value = self.q(state_action)
 
-        return q_value
-    
+            return q_value
+        
 class CriticVModel(keras.Model):
     def __init__(self, name='critic', **kwargs):
         super().__init__()

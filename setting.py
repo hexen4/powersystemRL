@@ -9,11 +9,18 @@ import numpy as np
 from pandapower.timeseries.data_sources.frame_data import DFData
 import pandas as pd
 
+#comprehensivereplaybuffer
+rho_min = 0 # TODO observe and change
+N = 1000 #capacity of replay buffer
+eta = 0.5  
+
+
 # --- Hyperparameters ---
 BATCH_SIZE = 128
 GAMMA = 0.99
 LR_ACTOR = 0.001
 LR_CRITIC = 0.001
+TARGET_NETWORK_UPDATE = 0.001
 NN_BOUND = 1
 SEQ_LENGTH= 3
 
@@ -45,37 +52,40 @@ DENSE_DIM_SEQ = 32
 HOUR_PER_TIME_STEP = 1
 
 # State
-IDX_POWER_GEN = 0
-IDX_SOLAR = 1
-IDX_WIND = 2
-IDX_CUSTOMER_PMW = np.arange(3, 8)  # Customer power: 5 indices [3, 4, 5, 6, 7]
-IDX_PGRID = 8
-IDX_MARKET_PRICE = 9
-IDX_DISCOMFORT = np.arange(10, 15)  # Discomfort: 5 indices [10, 11, 12, 13, 14]
-IDX_PREV_GENPOWER = 15
-IDX_PREV_CURTAILED = np.arange(16, 21)  # Previous curtailed: 5 indices [16, 17, 18, 19, 20]
-IDX_PREV_DEMAND = np.arange(21, 26)  # Previous demand: 5 indices [21, 22, 23, 24, 25]
-IDX_PREV_DISCOMFORT = np.arange(26, 31)  # Previous discomfort: 5 indices [26, 27, 28, 29, 30]
-IDX_LINE_LOSSES = 31
 
+IDX_SOLAR = 0
+IDX_WIND = 1
+IDX_CUSTOMER_PMW = np.arange(2, 7)  # Customer power: 5 indices [3, 4, 5, 6, 7]
+IDX_MARKET_PRICE = 8
+IDX_LINE_LOSSES = 9
+
+IDX_POWER_GEN = 0
+IDX_PGRID = 1
+IDX_PREV_DISCOMFORT = np.arange(2, 7)  # Previous discomfort: 5 indices 
+IDX_PREV_GENPOWER = 8
+IDX_PREV_CURTAILED = np.arange(9, 14)  # Previous curtailed: 5 indices
+IDX_PREV_DEMAND = np.arange(14, 19)  # Previous demand: 5 indices 
+IDX_DISCOMFORT = np.arange(20, 25)  # Discomfort: 5 indices
 
 # Action
-MAX_ACTION = np.array([100] + [0.6] * 5)  # [incentive_rate_max, curtail_c1_max, ..., curtail_c5_max]
-MIN_ACTION = np.array([0] + [0] * 5)      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
+MAX_ACTION = np.array([0.6] * 5,[100])  #do i need to dynamically update?
+MIN_ACTION = np.array([0] * 5,[0])      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
 ACTION_IDX = {
-    'incentive_rate': 0,          # Incentive rate action at index 0
-    'curtail_C1': 1,               # Curtailment for consumer 1 at index 1
-    'curtail_C2': 2,               # Curtailment for consumer 2 at index 2
-    'curtail_C3': 3,               # Curtailment for consumer 3 at index 3
-    'curtail_C4': 4,               # Curtailment for consumer 4 at index 4
-    'curtail_C5': 5                # Curtailment for consumer 5 at index 5
+    'curtail_C1': 0,               
+    'curtail_C2': 1,               
+    'curtail_C3': 2,               
+    'curtail_C4': 3,              
+    'curtail_C5': 4,               
+    'incentive_rate': 5            
 }
-N_INTERMITTENT_STATES = IDX_LINE_LOSSES + 1 
-N_CONTROLLABLE_STATES = len(MAX_ACTION) 
-N_ACTION = len(MAX_ACTION)
-STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES)
-STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,)
 
+N_ACTION = len(MAX_ACTION) 
+N_INTERMITTENT_STATES = 9 #solar, wind, customerpmwx5, market price, line losses
+N_CONTROLLABLE_STATES = 23 #power_gen, pgrid, discomfortx5, prev curtailedx5, prevgen, prevdemandx5, prevdiscomfortx5
+
+STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES) #number of time-dependent states
+STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,) #number of static / derived states
+ACTION_SHAPE = (N_ACTION,)
 
 # --- Cost Parameters ---
 

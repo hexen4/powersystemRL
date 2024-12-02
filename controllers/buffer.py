@@ -6,7 +6,9 @@ class
 '''
 import numpy as np
 import scipy.signal
+from setting import *
 from typing import Dict
+from torchrl.data import PrioritizedReplayBuffer, ListStorage
 # TODO change to buffer used in paper
 class Buffer:
     def __init__(self, buffer_size, state_seq_shape, state_fnn_shape, n_actions, gamma=0.99, lam=0.97):
@@ -183,6 +185,77 @@ class PrioritizedReplayBuffer:
             return self._retrieve(l_child_idx, cdf)
         else:
             return self._retrieve(r_child_idx, cdf - self.sum_tree[l_child_idx])
+
+class ComprehensivePrioritizedReplayBuffer(PrioritizedReplayBuffer):
+    def __init__(self, alpha, beta, buffer_size, eta, rho_min, **kwargs):
+        super().__init__(alpha=alpha, beta=beta, storage=ListStorage(buffer_size), **kwargs)
+        self.buffer_counter = 0
+        self.eta = eta
+        self.rho_min = rho_min
+        self.buffer_size = N
+        self.recent_scores = np.zeros(buffer_size)
+
+    def compute_recent_score(self, e):
+        """
+        Compute the recent score (rho_e) for a given episode index e.
+        """
+        E = self.buffer_counter  # Total episodes collected so far
+        N = self.buffer_size     # Replay buffer capacity
+        eta_e = self.eta         # Recent prioritization hyperparameter
+        rho_min = self.rho_min   # Minimum priority value
+
+        # Avoid division by zero for e
+        if e == 0:
+            e = 1
+
+        # Calculate rho_e using the given formula
+        rho_e = max(N * (eta_e ** (1000 * E / e)), rho_min)
+        return rho_e
+
+
+    def add_episode(self, episode_transitions, termination_reward):
+        """
+        Add all transitions from an episode to the buffer with the same priority.
+        
+        Parameters:
+            episode_transitions: list of transitions [(state, action, reward, next_state), ...]
+            termination_reward: float, the reward value for the termination state (ρ_f).
+        """
+        # Calculate recent score (ρ_e) for the episode
+        episode_index = self.buffer_counter // self.buffer_size  # Determine the episode index
+        rho_e = self.compute_recent_score(episode_index)
+
+        # Calculate total priority score (ρ = ρ_e + ρ_f)
+        rho_f = termination_reward
+        total_priority = rho_e + rho_f
+
+        # Add each transition in the episode to the buffer with the same priority
+        for transition in episode_transitions:
+            transition_idx = self.buffer_counter % self.buffer_size
+
+            # Unpack the transition tuple
+            state_seq, state_fnn, action, reward, next_state_seq, next_state_fnn = transition
+
+            # Store the transition
+            self.state_seq_buffer[transition_idx] = state_seq
+            self.state_fnn_buffer[transition_idx] = state_fnn
+            self.action_buffer[transition_idx] = action
+            self.reward_buffer[transition_idx] = reward
+            self.next_state_seq_buffer[transition_idx] = next_state_seq
+            self.next_state_fnn_buffer[transition_idx] = next_state_fnn
+
+            # Update the priority tree
+            tree_idx = transition_idx + self.buffer_size - 1
+            self.update_tree(tree_idx, total_priority)
+
+            # Increment the buffer counter
+            self.buffer_counter += 1
+
+
+    def sample(self, batch_size, return_info=True):
+        """Sample transitions with combined priority."""
+        sample, info = super().sample(batch_size, return_info=return_info)
+        return sample, info
 
 class ReplayBuffer:
     def __init__(self, buffer_size, state_seq_shape, state_fnn_shape, n_actions):
