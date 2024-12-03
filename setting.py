@@ -8,14 +8,24 @@
 import numpy as np
 from pandapower.timeseries.data_sources.frame_data import DFData
 import pandas as pd
+import torch
 
 #comprehensivereplaybuffer
 rho_min = 0 # TODO observe and change
 N = 1000 #capacity of replay buffer
 eta = 0.5  
+TIMESTEPS_BEFORE_TRAIN = 25e3 #warmup
+SORT_FREQ = int(1e5) #sort buffer every 100k steps (need to check)
 
 
-# --- Hyperparameters ---
+#SAC only
+GPU = True
+device_idx = 0
+if GPU:
+    device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
+else:
+    device = torch.device("cpu")
+# NN Hyperparameters
 BATCH_SIZE = 128
 GAMMA = 0.99
 LR_ACTOR = 0.001
@@ -23,6 +33,10 @@ LR_CRITIC = 0.001
 TARGET_NETWORK_UPDATE = 0.001
 NN_BOUND = 1
 SEQ_LENGTH= 3
+WEIGHT_CRITIC = 0.2
+TEMP = 0.1
+REPLAY_BUFER_SIZE = 1000000
+DISCOUNT_FACTOR = 0.9
 
 # TD3 only
 ACTION_NOISE_SCALE = 0.3
@@ -32,7 +46,7 @@ PARAM_NOISE_ADAPT_RATE = 1.01
 PARAM_NOISE_BOUND = 0.1
 PARAM_NOISE_SCALE = 0.1
 UPDATE_FREQ = 50
-UPDATE_TIMES = 4
+UPDATE_TIMES = 1
 WARMUP = 1000
 
 # PPO only
@@ -53,19 +67,19 @@ HOUR_PER_TIME_STEP = 1
 
 # State
 
-IDX_SOLAR = 0
-IDX_WIND = 1
-IDX_CUSTOMER_PMW = np.arange(2, 7)  # Customer power: 5 indices [3, 4, 5, 6, 7]
-IDX_MARKET_PRICE = 8
-IDX_LINE_LOSSES = 9
-
+# State
 IDX_POWER_GEN = 0
-IDX_PGRID = 1
-IDX_PREV_DISCOMFORT = np.arange(2, 7)  # Previous discomfort: 5 indices 
-IDX_PREV_GENPOWER = 8
-IDX_PREV_CURTAILED = np.arange(9, 14)  # Previous curtailed: 5 indices
-IDX_PREV_DEMAND = np.arange(14, 19)  # Previous demand: 5 indices 
-IDX_DISCOMFORT = np.arange(20, 25)  # Discomfort: 5 indices
+IDX_SOLAR = 1
+IDX_WIND = 2
+IDX_CUSTOMER_PMW = np.arange(3, 8)  # Customer power: 5 indices [3, 4, 5, 6, 7]
+IDX_PGRID = 8
+IDX_MARKET_PRICE = 9
+IDX_DISCOMFORT = np.arange(10, 15)  # Discomfort: 5 indices [10, 11, 12, 13, 14]
+IDX_PREV_GENPOWER = 15
+IDX_PREV_CURTAILED = np.arange(16, 21)  # Previous curtailed: 5 indices [16, 17, 18, 19, 20]
+IDX_PREV_DEMAND = np.arange(21, 26)  # Previous demand: 5 indices [21, 22, 23, 24, 25]
+IDX_PREV_DISCOMFORT = np.arange(26, 31)  # Previous discomfort: 5 indices [26, 27, 28, 29, 30]
+IDX_LINE_LOSSES = 31    
 
 # Action
 MAX_ACTION = np.array([0.6] * 5,[100])  #do i need to dynamically update?
@@ -80,13 +94,9 @@ ACTION_IDX = {
 }
 
 N_ACTION = len(MAX_ACTION) 
-N_INTERMITTENT_STATES = 9 #solar, wind, customerpmwx5, market price, line losses
-N_CONTROLLABLE_STATES = 23 #power_gen, pgrid, discomfortx5, prev curtailedx5, prevgen, prevdemandx5, prevdiscomfortx5
-
-STATE_SEQ_SHAPE = (SEQ_LENGTH, N_INTERMITTENT_STATES) #number of time-dependent states
-STATE_FNN_SHAPE = (N_CONTROLLABLE_STATES,) #number of static / derived states
+N_OBS = IDX_LINE_LOSSES + 1
 ACTION_SHAPE = (N_ACTION,)
-
+STATE_SHAPE = (N_OBS,)
 # --- Cost Parameters ---
 
 REWARD_INVALID_ACTION = -5e-3

@@ -94,40 +94,31 @@ class NormalizeAction:
         return a
 
 class NormalizeObservation:
-    def __init__(self, epsilon=1e-8):
-        self.obs_seq_rms = RunningMeanStd(shape=STATE_SEQ_SHAPE)
-        self.obs_fnn_rms = RunningMeanStd(shape=STATE_FNN_SHAPE)
+    def __init__(self, shape, epsilon=1e-8):
+        self.obs_rms = RunningMeanStd(shape=shape)  
         self.epsilon = epsilon
 
-    def normalize(self, obs, update=True):
-        obs_seq, obs_fnn = obs
+    def normalize(self, state, update=True):
         if update:
-            self.obs_seq_rms.update(obs_seq)
-            self.obs_fnn_rms.update(obs_fnn)
-        obs_seq = (obs_seq - self.obs_seq_rms.mean) / np.sqrt(self.obs_seq_rms.var + self.epsilon)
-        obs_seq = np.clip(obs_seq, -5, 5)
-        obs_fnn = (obs_fnn - self.obs_fnn_rms.mean) / np.sqrt(self.obs_fnn_rms.var + self.epsilon)
-        obs_fnn = np.clip(obs_fnn, -5, 5)
-        return obs_seq, obs_fnn
-    
+            self.obs_rms.update(state)
+        normalized_state = (state - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon)
+        normalized_state = np.clip(normalized_state, -5, 5)
+        return normalized_state
+
     def save(self, dir):
         fpath = Path(os.path.join(dir, 'obs.pkl'))
         fpath.parent.mkdir(parents=True, exist_ok=True)
         with open(fpath, 'wb') as f:
             pickle.dump({
-                'obs_seq_mean': self.obs_seq_rms.mean,
-                'obs_seq_var': self.obs_seq_rms.var,
-                'obs_fnn_mean': self.obs_fnn_rms.mean,
-                'obs_fnn_var': self.obs_fnn_rms.var,
+                'obs_mean': self.obs_rms.mean,
+                'obs_var': self.obs_rms.var,
             }, f)
 
     def load(self, dir):
         with open(os.path.join(dir, 'obs.pkl'), 'rb') as f:
             data = pickle.load(f)
-            self.obs_seq_rms.mean = data['obs_seq_mean']
-            self.obs_seq_rms.var = data['obs_seq_var']
-            self.obs_fnn_rms.mean = data['obs_fnn_mean']
-            self.obs_fnn_rms.var = data['obs_fnn_var']
+            self.obs_rms.mean = data['obs_mean']
+            self.obs_rms.var = data['obs_var']
 
 class NormalizeReward:
     def __init__(self, gamma=GAMMA, epsilon=1e-8):

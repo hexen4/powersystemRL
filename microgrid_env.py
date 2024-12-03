@@ -24,18 +24,18 @@ class MicrogridEnv():
         self.prev_genpower_buffer = deque(maxlen=self.buffer)
         self.reward_history = []
         self.buffer = buffer
+        
 
         self.initial_state = initial_state 
         self.action_space = spaces.Box(low=-1, high=1, shape=(N_ACTION,1), dtype=np.float32)  #shape of action
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(N_INTERMITTENT_STATES+N_CONTROLLABLE_STATES,1), dtype=np.float32)  # shape of  state
-        self.state_seq = initial_state[:N_INTERMITTENT_STATES+1]
-        self.state_fnn = initial_state[N_INTERMITTENT_STATES:]
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(N_OBS,1), dtype=np.float32)  # shape of  state
         self.market_prices = price_profile_df.to_numpy()
         self.original_datasource_consumers = load_profile_df
         self.datasource_consumers = self.original_datasource_consumers.copy()
         self.DfData_consumers = DFData(self.datasource_consumers)
-    
+        self.state = self.initial_state
         
+        self.applied = False
     def step(self, action):
         #action [(power_curtailed)x5, incentive rate]
         """
@@ -46,8 +46,8 @@ class MicrogridEnv():
         scaled_action = scale_action(action)  
 
         self.state_seq,self.state_fnn = self.update_state(scaled_action) #need to do this for st+1 ->. IC at t = 0
-        assert self.observation_space.contains([self.state_seq,self.state_fnn]), f"State {self.state} is out of bounds!"
-    
+        assert self.observation_space.contains(self.state), f"State {self.state} is out of bounds!"
+        _ = self.control_step(self.net, self.state_seq[IDX_LINE_LOSSES])
         reward = self._calculate_reward(action, self.state) 
         self.reward_history.append(reward)
         self.last_time_step = self.current_timestep
@@ -59,6 +59,15 @@ class MicrogridEnv():
 
         return self.state, reward, done, {} # TODO make sure reward cumultative in next func.
     
+    def control_step(self, net, line_losses):
+        if not self.applied:
+            load_values = net.load.loc[self.curtailment_indices, 'p_mw'].to_numpy()
+            updated_load_values = np.maximum(load_values - np.array(self.action[:-1]), 0)
+            net.load.loc[self.curtailment_indices, 'p_mw'] = updated_load_values
+            net.gen.loc[self.ids.get('dg'), 'p_mw'] = line_losses
+            self.applied = True
+        else:
+            print("misaligned control step")
     def _calculate_reward(self, scaled_action, state):
 
         generation_cost = cal_costgen(state[IDX_POWER_GEN]) 
@@ -96,10 +105,8 @@ class MicrogridEnv():
         scaled_action=scaled_action,
         state=state)
         return reward
-    def update_state(self, action): # TODO sort this out. 
-        state_seq = [0] * len(self.state_seq_shape[1])
-        state_fnn = [0] * len(self.state_fnn_shape)  
-
+    def update_state(self, action): 
+        next_state = [0] * N_OBS
 
         # Fetch network response values based on the action
         line_losses, net, ids = network_comp(TIMESTEPS = self.current_timestep)
@@ -114,28 +121,25 @@ class MicrogridEnv():
         market_price = self.market_prices[self.current_timestep]
         
 
-        state_seq[IDX_SOLAR] = pv_pw  # Solar generation
-        state_seq[IDX_WIND] = wt_pw   # Wind generation
-        state_seq[IDX_CUSTOMER_PMW] = P_demand  # Customer power demand
-        state_seq[IDX_MARKET_PRICE] = market_price  # Market price
-        state_seq[IDX_LINE_LOSSES] = line_losses  # Line losses
-
-
-        state_fnn[IDX_POWER_GEN] = cdg_pw
-        state_fnn[IDX_PGRID] = Pgrid
-        state_fnn[IDX_DISCOMFORT] = discomforts
-        state_fnn[IDX_PREV_GENPOWER] = self.prev_genpower_buffer[-1] if len(self.prev_genpower_buffer) > 0 else 0
-        state_fnn[IDX_PREV_CURTAILED] = self.prev_curtailed_buffer[-1] if len(self.prev_curtailed_buffer) > 0 else [0] * 5
-        state_fnn[IDX_PREV_DEMAND] = self.prev_P_demand_buffer[-1] if len(self.prev_P_demand_buffer) > 0 else [0] * 5
-        state_fnn[IDX_PREV_DISCOMFORT] = self.prev_discomforts_buffer[-1] if len(self.prev_discomforts_buffer) > 0 else [0] * 5
-
+        next_state[IDX_POWER_GEN] = cdg_pw
+        next_state[IDX_SOLAR] = pv_pw
+        next_state[IDX_WIND] = wt_pw
+        next_state[IDX_CUSTOMER_PMW] = P_demand
+        next_state[IDX_PGRID] = Pgrid
+        next_state[IDX_MARKET_PRICE] = market_price
+        next_state[IDX_DISCOMFORT] = discomforts
+        next_state[IDX_PREV_GENPOWER] = self.prev_genpower_buffer[-2] if len(self.prev_genpower_buffer) > 1 else 0
+        next_state[IDX_PREV_CURTAILED] = self.prev_curtailed_buffer[-2] if len(self.prev_curtailed_buffer) > 1 else [0] * 5
+        next_state[IDX_PREV_DEMAND] = self.prev_P_demand_buffer[-2] if len(self.prev_P_demand_buffer) > 1 else [0] * 5
+        next_state[IDX_PREV_DISCOMFORT] = self.prev_discomforts_buffer[-2] if len(self.prev_discomforts_buffer) > 1 else [0] * 5
+        next_state[IDX_LINE_LOSSES] = line_losses
         # Append current values to the tracking buffers
         self.prev_curtailed_buffer.append(curtailed)
         self.prev_P_demand_buffer.append(P_demand)
         self.prev_discomforts_buffer.append(discomforts)
         self.prev_genpower_buffer.append(cdg_pw)
 
-        return state_seq, state_fnn
+        return next_state
     def reset(self):
         """
         Reset the environment to its initial state and return the initial observation.

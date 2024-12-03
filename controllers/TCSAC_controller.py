@@ -25,160 +25,149 @@ class:
 import logging
 import os
 from typing import Dict
+import math
+import random
+import gym
 import numpy as np
-
-import tensorflow as tf
-import keras as keras
-#from keras.optimizers import Adam 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.distributions import Normal
 from pandapower.control.basic_controller import Controller
-from controllers.models import ActorMuModel, CriticQModel, SequenceModel, get_mu_actor, get_q_critic, get_pi_actor
-from controllers.buffer import ReplayBuffer, PrioritizedReplayBuffer, ComprehensivePrioritizedReplayBuffer
+from controllers.models import ActorPiModel, CriticQModel, CriticVModel
+from controllers.buffer import ComprehensivePrioritizedReplayBuffer
 from setting import *
 import utils
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
+import argparse
 
-class TD3Agent(Controller):
-    def __init__(self, net, ids, pv_profile_df, wt_profile_df, load_profile_df, price_profile_df,
-        noise_type = 'action', sequence_model_type='none', use_pretrained_sequence_model=False,
-        n_epochs=None, training=False,
-        delay=2, gamma=GAMMA, lr_actor=LR_ACTOR, lr_critic=LR_CRITIC, 
-        buffer_size=50000, batch_size=128, epsilon_p=0.001, **kwargs):
+parser = argparse.ArgumentParser(description='Train or test neural net motor controller.')
+parser.add_argument('--train', dest='train', action='store_true', default=False)
+parser.add_argument('--test', dest='test', action='store_true', default=False)
+
+args = parser.parse_args()
+
+class NormalizedActions(gym.ActionWrapper):
+    def _action(self, action):
+        low  = self.action_space.low
+        high = self.action_space.high
+        
+        action = low + (action + 1.0) * 0.5 * (high - low)
+        action = np.clip(action, low, high)
+        
+        return action
+
+    def _reverse_action(self, action):
+        low  = self.action_space.low
+        high = self.action_space.high
+        
+        action = 2 * (action - low) / (high - low) - 1
+        action = np.clip(action, low, high)
+        
+        return action
+    
+
+class TCSAC(Controller):
+    def __init__(self, net, ids, epsilon_p=0.001, **kwargs):
         super().__init__(net, **kwargs)
         self.ids = ids
-        self.pv_profile = pv_profile_df
-        self.wt_profile = wt_profile_df
-        self.load_profile = load_profile_df
-        self.price_profile = price_profile_df
         self.curtailment_indices = [6, 19, 11, 27, 22]
 
-        self.state_seq_shape = STATE_SEQ_SHAPE
-        self.state_fnn_shape = STATE_FNN_SHAPE
-        self.n_action = N_ACTION
-
-        self.use_pretrained_sequence_model = use_pretrained_sequence_model
-        self.training = training
-
-        self.noise_type = noise_type
-        self.action_noise_scale = ACTION_NOISE_SCALE
-
-        self.n_epochs = n_epochs
         self.update_freq = UPDATE_FREQ
         self.update_times = UPDATE_TIMES
-        self.delay = delay
-        self.gamma = gamma
-        self.batch_size = batch_size
+        self.critic_weight = WEIGHT_CRITIC
+        self.batch_size = BATCH_SIZE
+        self.delay = 2
+        self.buffer_size = BUFFER_SIZE
         self.epsilon_p = epsilon_p
-        self.action = None
-
-        # counter
-        self.timestep = TIMESTEPS
 
         # normalization
         self.obs_norm = utils.NormalizeObservation()
         self.a_norm = utils.NormalizeAction()
         self.r_norm = utils.NormalizeReward()
 
-        #i dont think ids are neccessary 
         # action bounds
         self.max_action = MAX_ACTION
-        self.min_action = MIN_ACTION    
+        self.min_action = MIN_ACTION   
+        self.action = None 
 
         # internal states
         self.prev_state = None
         self.action = None
-        self.applied = False
+        
 
         
         # buffer
-        self.buffer = ComprehensivePrioritizedReplayBuffer(buffer_size, self.state_seq_shape, self.state_fnn_shape, self.n_action)
-
-        # models
-        self.sequence_model_type = sequence_model_type
+        self.buffer = ComprehensivePrioritizedReplayBuffer()
         
-        # actor critic
-        self.actor = get_pi_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel())
-        self.target_actor = get_pi_actor(SequenceModel(sequence_model_type, name='sequence_model'), ActorMuModel())
+        self.critic1 = CriticQModel(N_OBS).to(device)
+        self.critic2 = CriticQModel(N_OBS).to(device)
+        self.critic3 = CriticQModel(N_OBS).to(device)
+        self.target_critic1 = CriticQModel(N_OBS).to(device)
+        self.target_critic2 = CriticQModel(N_OBS).to(device)
+        self.target_critic3 = CriticQModel(N_OBS).to(device)
+        self.policy_net = ActorPiModel(N_OBS).to(device)
+        self.log_alpha = torch.zeros(1, dtype=torch.float32, requires_grad=True, device=device)
+        print('Soft Q Network (1,2,3): ', self.soft_q_net1)
+        print('Policy Network: ', self.policy_net)
 
-        self.critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-        self.critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-        self.critic3 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
+        for target_param, param in zip(self.target_critic1.parameters(), self.critic1.parameters()):
+            target_param.data.copy_(param.data)
+        for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
+            target_param.data.copy_(param.data)
+        for target_param, param in zip(self.target_critic3.parameters(), self.critic3.parameters()):
+            target_param.data.copy_(param.data)
 
-        self.target_critic1 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-        self.target_critic2 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-        self.target_critic3 = get_q_critic(SequenceModel(sequence_model_type, name='sequence_model'), CriticQModel())
-        if self.sequence_model_type != 'none': 
-            # sequence model
-            self.sequence_model = SequenceModel(sequence_model_type, name='sequence_model')
-            self.sequence_model.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
+        self.soft_q_criterion1 = nn.MSELoss()
+        self.soft_q_criterion2 = nn.MSELoss()
+        self.soft_q_criterion3 = nn.MSELoss()
+        
+        soft_q_lr = 1e-3
+        policy_lr = 1e-3
+        alpha_lr  = 1e-3
 
-        self.actor.compile(optimizer=Adam(learning_rate=lr_actor, epsilon=1e-5))
-        self.critic1.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
-        self.critic2.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
-        self.critic3.compile(optimizer=Adam(learning_rate=lr_critic, epsilon=1e-5))
-
-    def control_step(self, net, line_losses):
-        if not self.applied:
-            load_values = net.load.loc[self.curtailment_indices, 'p_mw'].to_numpy()
-            updated_load_values = np.maximum(load_values - np.array(self.action[:-1]), 0)
-            net.load.loc[self.curtailment_indices, 'p_mw'] = updated_load_values
-            net.gen.loc[self.ids.get('dg'), 'p_mw'] = line_losses
-            self.applied = True
-        else:
-            print("misaligned control step")
+        self.soft_q_optimizer1 = optim.Adam(self.critic1.parameters(), lr=soft_q_lr)
+        self.soft_q_optimizer2 = optim.Adam(self.critic2.parameters(), lr=soft_q_lr)
+        self.soft_q_optimizer3 = optim.Adam(self.critic.parameters(), lr=soft_q_lr)
+        self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
+        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=alpha_lr)
+        
     
-    def learn(self):
-        if self.buffer.buffer_counter < self.batch_size:
-            return
-
-        if self.buffer.buffer_counter < self.warmup:
-            return
-
-        if self.timestep % self.update_freq != 0:
-            return
-
-        for _ in range(self.update_times):
-            self.update()
-        
-    def load_models(self, dir='model_weights', run=1):
-        print('... Loading Models ...')
-        self.actor.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'actor_weights'))
-        self.critic1.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic1_weights'))
-        self.critic2.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic2_weights'))
-        self.critic3.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic3_weights'))
-        self.target_actor.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_actor_weights'))
-        self.target_critic1.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic1_weights'))
-        self.target_critic2.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic2_weights'))
-        self.target_critic3.load_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic3_weights'))
     def model_info(self):
         self.actor.summary()
         self.critic1.summary()
-    
-    @tf.function
-    def perturb_policy(self): #this is exploration -> entropy!!!
-        pass
-    
-    def policy(self, net, t, state):
-        # network outputs
-        state_seq, state_fnn = self.obs_norm.normalize(state, update=False) #watch out for state
-        # add batch dimension
-        tf_state_seq = tf.expand_dims(tf.convert_to_tensor(state_seq, dtype=tf.float32), axis=0) 
-        tf_state_fnn = tf.expand_dims(tf.convert_to_tensor(state_fnn, dtype=tf.float32), axis=0)
 
-        action_mean, action_std = self.actor([tf_state_seq, tf_state_fnn], training=self.training)
-        if self.training:
-            # reparam trick
-            epsilon = tf.random.normal(shape=action_mean.shape, mean=0.0, stddev=1.0)
-            nn_action = action_mean + np.multiply(epsilon, action_std)  # a_t = μ + σ * ε
-        else: #TODO do we need to call deterministic actor mu?
-        # Deterministic action during testing (mean of the distribution)
-            nn_action = action_mean
+    def get_action(self, state, deterministic):
+        state = torch.FloatTensor(state).unsqueeze(0).to(device)
+        mean, log_std = self.forward(state)
+        std = log_std.exp()
         
-        nn_action = tf.squeeze(nn_action, axis=0).numpy()
-        # Add exploration noise during training
-        # if self.training and self.noise_type == 'action':
-        #     nn_action += np.random.normal(loc=0., scale=self.action_noise_scale, size=(self.n_action,))
+        normal = Normal(0, 1)
+        z      = normal.sample(mean.shape).to(device)
+        action = self.action_range* torch.tanh(mean + std*z)
+        
+        action = self.action_range* torch.tanh(mean).detach().cpu().numpy()[0] if deterministic else action.detach().cpu().numpy()[0]
+        return action
+
+    def sample_action(self,):
+        a=torch.FloatTensor(self.num_actions).uniform_(-1, 1)
+        return self.action_range*a.numpy()
+
+    def policy(self, state, random, deterministic=False):
+        # network outputs
+        state = self.obs_norm.normalize(state, update=False) 
+        if not random:
+            # reparam trick
+            nn_action = self.get_action(state, deterministic)
+        else: 
+        # Deterministic action during testing (mean of the distribution)
+            nn_action = self.sample_action
+        
         nn_action = np.clip(nn_action, -NN_BOUND, NN_BOUND)
 
-        # Extract curtailment actions and incentive rate from nn_acti   on
+        # Extract curtailment actions and incentive rate from nn_action
         curtailment_actions = nn_action[:-1]  
         incentive_rate_action = nn_action[-1]  
 
@@ -188,32 +177,55 @@ class TD3Agent(Controller):
         # Combine scaled curtailments and incentive rate into mg_action
         mg_action = np.concatenate((scaled_curtailments, [scaled_incentives]))
 
-        # Increment the timestep
-        self.timestep += 1
-
         return mg_action, nn_action
     
-    def save_models(self, dir='model_weights', run=1):
+    def save_models(self, path):
         print('... Saving Models ...')
-        self.actor.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'actor_weights'))
-        self.critic1.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic1_weights'))
-        self.critic2.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic2_weights'))
-        self.critic3.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'critic3_weights'))
-        self.target_actor.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_actor_weights'))
-        self.target_critic1.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic1_weights'))
-        self.target_critic2.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic2_weights'))
-        self.target_critic3.save_weights(os.path.join(dir, self.sequence_model_type, str(run), 'target_critic2_weights'))
+        torch.save(self.policy_net.state_dict(), f'{path}_actor_weights')
+        torch.save(self.critic1.state_dict(), f'{path}_critic1_weights')
+        torch.save(self.critic2.state_dict(), f'{path}_critic2_weights')
+        torch.save(self.critic3.state_dict(), f'{path}_critic3_weights')
+        torch.save(self.target_critic1.state_dict(), f'{path}_target_critic1_weights')
+        torch.save(self.target_critic2.state_dict(), f'{path}_target_critic2_weights')
+        torch.save(self.target_critic3.state_dict(), f'{path}_target_critic3_weights')
 
-    def update(self):
+    def load_models(self, path):
+        print('... Loading Models ...')
+        self.policy_net.load_state_dict(torch.load(f'{path}_actor_weights'))
+        self.critic1.load_state_dict(torch.load(f'{path}_critic1_weights'))
+        self.critic2.load_state_dict(torch.load(f'{path}_critic2_weights'))
+        self.critic3.load_state_dict(torch.load(f'{path}_critic3_weights'))
+        self.target_critic1.load_state_dict(torch.load(f'{path}_target_critic1_weights'))
+        self.target_critic2.load_state_dict(torch.load(f'{path}_target_critic2_weights'))
+        self.target_critic3.load_state_dict(torch.load(f'{path}_target_critic3_weights'))
+
+        # Set models to evaluation mode
+        self.policy_net.eval()
+        self.critic1.eval()
+        self.critic2.eval()
+        self.critic3.eval()
+        self.target_critic1.eval()
+        self.target_critic2.eval()
+        self.target_critic3.eval()
+
+# if len(replay_buffer) > batch_size and timestep > warmup and timestep % update_freq == 0:
+#     for i in range(update_itr):
+#         sac_trainer.update(batch_size, reward_scale=10., auto_entropy=AUTO_ENTROPY, target_entropy=-1.*action_dim)
+    def update(self): 
         # sample
-        state_seq_batch, state_fnn_batch, action_batch, reward_batch, next_state_seq_batch, next_state_fnn_batch, idxs, weights = self.buffer.sample(self.batch_size)
-        state_seq_batch = tf.convert_to_tensor(state_seq_batch, dtype=tf.float32)
-        state_fnn_batch = tf.convert_to_tensor(state_fnn_batch, dtype=tf.float32)
-        action_batch = tf.convert_to_tensor(action_batch, dtype=tf.float32)
-        reward_batch = tf.convert_to_tensor(reward_batch, dtype=tf.float32)
-        next_state_seq_batch = tf.convert_to_tensor(next_state_seq_batch, dtype=tf.float32)
-        next_state_fnn_batch = tf.convert_to_tensor(next_state_fnn_batch, dtype=tf.float32)
-        weights = tf.convert_to_tensor(weights, dtype=tf.float32)
+        state, action, reward, next_state, done = self.replay_buffer.sample(batch_size) #need to add weights
+        state      = torch.FloatTensor(state).to(device)
+        next_state = torch.FloatTensor(next_state).to(device)
+        action     = torch.FloatTensor(action).to(device)
+        reward     = torch.FloatTensor(reward).unsqueeze(1).to(device)  # reward is single value, unsqueeze() to add one dim to be [reward] at the sample dim;
+        done       = torch.FloatTensor(np.float32(done)).unsqueeze(1).to(device)
+
+        predicted_q_value1 = self.soft_q_net1(state, action)
+        predicted_q_value2 = self.soft_q_net2(state, action)
+        predicted_q_value3 = self.soft_q_net3(state, action)
+        new_action, log_prob, z, mean, log_std = self.policy_net.evaluate(state) # TODO start here -> need to change into diffferent
+        new_next_action, next_log_prob, _, _, _ = self.policy_net.evaluate(next_state)
+        reward = reward_scale * (reward - reward.mean(dim=0)) / (reward.std(dim=0) + 1e-6) # normalize with batch mean and std; plus a small number to prevent numerical problem
 
         # update critics
         critic_loss, target_values, td_errs = self.update_critics(state_seq_batch, state_fnn_batch, action_batch, reward_batch, next_state_seq_batch, next_state_fnn_batch, weights)
@@ -265,14 +277,15 @@ class TD3Agent(Controller):
 
         # target actions
         target_actions = self.target_actor([next_state_seq_batch, next_state_fnn_batch], training=True)
-        target_actions += tf.clip_by_value(tf.random.normal(shape=(self.batch_size, self.n_action), stddev=0.2), -0.5, 0.5)
+        #target_actions += tf.clip_by_value(tf.random.normal(shape=(self.batch_size, self.n_action), stddev=0.2), -0.5, 0.5) this is noise
         target_actions = tf.clip_by_value(target_actions, -NN_BOUND, NN_BOUND)
         target_actions = self.a_norm.tf_normalize(target_actions)
 
         # target values
         target_q_value1 = self.target_critic1([next_state_seq_batch, next_state_fnn_batch, target_actions], training=True)
         target_q_value2 = self.target_critic2([next_state_seq_batch, next_state_fnn_batch, target_actions], training=True)
-        target_values = reward_batch + self.gamma * tf.math.minimum(target_q_value1, target_q_value2)
+        target_q_value3 = self.target_critic2([next_state_seq_batch, next_state_fnn_batch, target_actions], training=True)
+        target_values = reward_batch + (self.critic_weight *target_q_value1) + (1-self.critic_weight)*tf.math.minimum(target_q_value2, target_q_value3) #need entropy term
 
         # td errors
         td_errs = target_values - self.critic1([state_seq_batch, state_fnn_batch, action_batch])
@@ -305,42 +318,5 @@ class TD3Agent(Controller):
         for idx, p in zip(idxs, priorities):
             self.buffer.update_tree(idx, p)
 
-    @tf.function
-    def update_sequence_model(self, state_seq_batch, state_fnn_batch, action_batch, target_values):
-        huber_loss = keras.losses.Huber()
-        with tf.GradientTape() as tape:
-            critic_loss = huber_loss(target_values, self.critic1([state_seq_batch, state_fnn_batch, action_batch], training=True)) 
-            critic_loss += huber_loss(target_values, self.critic2([state_seq_batch, state_fnn_batch, action_batch], training=True))
-            critic_loss /= (2 * SEQ_LENGTH)
-        seq_grads = tape.gradient(critic_loss, self.sequence_model.trainable_variables)
-        seq_grads = [tf.clip_by_norm(g, 1.0) for g in seq_grads]
-        self.sequence_model.optimizer.apply_gradients(zip(seq_grads, self.sequence_model.trainable_variables))
+
     
-    @tf.function
-    def update_target_networks(self, tau=0.005):
-        if self.sequence_model_type == 'none':
-            target_actor_weights = self.target_actor.trainable_weights
-            actor_weights = self.actor.trainable_weights
-            target_critic1_weights = self.target_critic1.trainable_weights
-            critic1_weights = self.critic1.trainable_weights
-            target_critic2_weights = self.target_critic2.trainable_weights
-            critic2_weights = self.critic2.trainable_weights
-        else:
-            target_actor_weights = self.target_actor.get_layer('actor_mu_model_2').trainable_weights
-            actor_weights = self.actor.get_layer('actor_mu_model').trainable_weights
-            target_critic1_weights = self.target_critic1.get_layer('critic_q_model_2').trainable_weights
-            critic1_weights = self.critic1.get_layer('critic_q_model').trainable_weights
-            target_critic2_weights = self.target_critic2.get_layer('critic_q_model_3').trainable_weights
-            critic2_weights = self.critic2.get_layer('critic_q_model_1').trainable_weights
-
-        # update target actor
-        for target_weight, weight in zip(target_actor_weights, actor_weights):
-            target_weight.assign(tau * weight + (1 - tau) * target_weight)
-
-        # update target critic1
-        for target_weight, weight in zip(target_critic1_weights, critic1_weights):
-            target_weight.assign(tau * weight + (1 - tau) * target_weight)
-
-        # update target critic2
-        for target_weight, weight in zip(target_critic2_weights, critic2_weights):
-            target_weight.assign(tau * weight + (1 - tau) * target_weight)
