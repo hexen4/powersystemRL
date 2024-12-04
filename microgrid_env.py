@@ -10,32 +10,29 @@ from gym import spaces
 from network_comp import network_comp
 from collections import deque
 class MicrogridEnv():
-    def __init__(self, net, ids, initial_state, w1, w2,H = len(TIMESTEPS), J = NO_CONSUMERS, buffer = 5):  
-        self.H = H  # Number of timesteps (planning horizon)
-        self.J = J  # Number of active consumers
+    def __init__(self, w1, w2):  
+        self.H = MAX_STEPS # Number of timesteps (planning horizon)
+        self.J = NO_CONSUMERS  # Number of active consumers
+        self.net, _ = network_comp(0)
         self.ids = ids
         self.current_timestep = 0
 
         self.w1, self.w2 = w1, w2  # Weights for objectives
-        self.net = net
         self.prev_curtailed_buffer = deque(maxlen=self.buffer)
         self.prev_P_demand_buffer = deque(maxlen=self.buffer)
         self.prev_discomforts_buffer = deque(maxlen=self.buffer)
         self.prev_genpower_buffer = deque(maxlen=self.buffer)
         self.reward_history = []
-        self.buffer = buffer
-        
 
-        self.initial_state = initial_state 
+        _,self.net = network_comp(0)
         self.action_space = spaces.Box(low=-1, high=1, shape=(N_ACTION,1), dtype=np.float32)  #shape of action
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(N_OBS,1), dtype=np.float32)  # shape of  state
         self.market_prices = price_profile_df.to_numpy()
         self.original_datasource_consumers = load_profile_df
         self.datasource_consumers = self.original_datasource_consumers.copy()
         self.DfData_consumers = DFData(self.datasource_consumers)
-        self.state = self.initial_state
-        
         self.applied = False
+        
     def step(self, action):
         #action [(power_curtailed)x5, incentive rate]
         """
@@ -109,7 +106,7 @@ class MicrogridEnv():
         next_state = [0] * N_OBS
 
         # Fetch network response values based on the action
-        line_losses, net, ids = network_comp(TIMESTEPS = self.current_timestep)
+        line_losses, net = network_comp(TIMESTEPS = self.current_timestep)
 
         curtailed = np.array((action[:-1]))
         P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy()

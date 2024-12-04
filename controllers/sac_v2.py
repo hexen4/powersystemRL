@@ -22,7 +22,6 @@ from IPython.display import clear_output
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from IPython.display import display
-from reacher import Reacher
 
 import argparse
 import time
@@ -245,7 +244,7 @@ class SAC_Trainer():
         self.alpha_optimizer = optim.Adam([self.log_alpha], lr=alpha_lr)
 
     
-    def update(self, batch_size, reward_scale=10., auto_entropy=True, target_entropy=-2, gamma=0.99,soft_tau=1e-2):
+    def update(self, batch_size, reward_scale=10., auto_entropy=True, target_entropy= target_param,gamma=0.99,soft_tau=1e-2):
         state, action, reward, next_state, done = self.replay_buffer.sample(batch_size)
         # print('sample:', state, action,  reward, done)
 
@@ -279,8 +278,8 @@ class SAC_Trainer():
         q_value_loss1 = self.soft_q_criterion1(predicted_q_value1, target_q_value.detach())  # detach: no gradients for the variable
         q_value_loss2 = self.soft_q_criterion2(predicted_q_value2, target_q_value.detach())
 
-
-        self.soft_q_optimizer1.zero_grad()
+        #change target_q_min and target_q_min and q_value loss
+        self.soft_q_optimizer1.zero_grad()  
         q_value_loss1.backward()
         self.soft_q_optimizer1.step()
         self.soft_q_optimizer2.zero_grad()
@@ -289,7 +288,7 @@ class SAC_Trainer():
 
     # Training Policy Function
         predicted_new_q_value = torch.min(self.soft_q_net1(state, new_action),self.soft_q_net2(state, new_action))
-        policy_loss = (self.alpha * log_prob - predicted_new_q_value).mean()
+        policy_loss = (self.alpha * log_prob - predicted_new_q_value).mean() #change this
 
         self.policy_optimizer.zero_grad()
         policy_loss.backward()

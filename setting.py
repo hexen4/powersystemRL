@@ -8,64 +8,35 @@
 import numpy as np
 from pandapower.timeseries.data_sources.frame_data import DFData
 import pandas as pd
-import torch
 
 #comprehensivereplaybuffer
-rho_min = 0 # TODO observe and change
-N = 1000 #capacity of replay buffer
-eta = 0.5  
-TIMESTEPS_BEFORE_TRAIN = 25e3 #warmup
-SORT_FREQ = int(1e5) #sort buffer every 100k steps (need to check)
-
+RHO_MIN = 10 # TODO observe and change
+ETA = 0.5  
+REPLAY_BUFER_SIZE = 1e6
+BATCH_SIZE = 128
 
 #SAC only
 GPU = True
+DETERMINISTIC = False
 device_idx = 0
-if GPU:
-    device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
-else:
-    device = torch.device("cpu")
+DISCOUNT_FACTOR = 0.9
+WEIGHT_CRITIC = 0.2
+TEMP = 0.1
+
+
+#ENVIRONMENT
+MAX_EPISODES = 8000
+HOUR_PER_TIME_STEP = 1
+MAX_STEPS = 24 / HOUR_PER_TIME_STEP
+WARMUP = 20 * BATCH_SIZE
+UPDATE_FREQ = 5
+
 # NN Hyperparameters
-BATCH_SIZE = 128
-GAMMA = 0.99
 LR_ACTOR = 0.001
 LR_CRITIC = 0.001
 TARGET_NETWORK_UPDATE = 0.001
 NN_BOUND = 1
-SEQ_LENGTH= 3
-WEIGHT_CRITIC = 0.2
-TEMP = 0.1
-REPLAY_BUFER_SIZE = 1000000
-DISCOUNT_FACTOR = 0.9
 
-# TD3 only
-ACTION_NOISE_SCALE = 0.3
-BUFFER_SIZE = 500000
-NOISE_TYPE = 'param' # ['action', 'param']
-PARAM_NOISE_ADAPT_RATE = 1.01
-PARAM_NOISE_BOUND = 0.1
-PARAM_NOISE_SCALE = 0.1
-UPDATE_FREQ = 50
-UPDATE_TIMES = 1
-WARMUP = 1000
-
-# PPO only
-POLICY_CLIP = 0.2
-TARGET_KL = 0.01
-PPO_BATCH_SIZE = 60
-PPO_TRAIN_FREQ = 720
-PPO_TRAIN_ITERS = 80
-
-# others
-PREDICT_LENGTH = 24
-DENSE_DIM_A = 16
-DENSE_DIM_FNN = 16
-DENSE_DIM_SEQ = 32
-
-# Environment
-HOUR_PER_TIME_STEP = 1
-
-# State
 
 # State
 IDX_POWER_GEN = 0
@@ -97,12 +68,9 @@ N_ACTION = len(MAX_ACTION)
 N_OBS = IDX_LINE_LOSSES + 1
 ACTION_SHAPE = (N_ACTION,)
 STATE_SHAPE = (N_OBS,)
+
 # --- Cost Parameters ---
-
-REWARD_INVALID_ACTION = -5e-3
-PENALTY_FACTOR = 5
 EPSILON = 0.5 #incentive per unit curtailed
-
 WTRATED = 500 / 1000 #MW
 v_opt = 12 
 v_in = 3

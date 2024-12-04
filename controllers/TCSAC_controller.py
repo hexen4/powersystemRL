@@ -25,29 +25,18 @@ class:
 import logging
 import os
 from typing import Dict
-import math
-import random
+from microgrid_env import MicrogridEnv
 import gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-from torch.distributions import Normal
 from pandapower.control.basic_controller import Controller
-from controllers.models import ActorPiModel, CriticQModel, CriticVModel
+from controllers.models import ActorPiModel, CriticQModel
 from controllers.buffer import ComprehensivePrioritizedReplayBuffer
 from setting import *
 import utils
-from IPython.display import clear_output
 import matplotlib.pyplot as plt
-import argparse
-
-parser = argparse.ArgumentParser(description='Train or test neural net motor controller.')
-parser.add_argument('--train', dest='train', action='store_true', default=False)
-parser.add_argument('--test', dest='test', action='store_true', default=False)
-
-args = parser.parse_args()
 
 class NormalizedActions(gym.ActionWrapper):
     def _action(self, action):
@@ -75,12 +64,10 @@ class TCSAC(Controller):
         self.ids = ids
         self.curtailment_indices = [6, 19, 11, 27, 22]
 
-        self.update_freq = UPDATE_FREQ
-        self.update_times = UPDATE_TIMES
+        self.counter = 0
         self.critic_weight = WEIGHT_CRITIC
         self.batch_size = BATCH_SIZE
-        self.delay = 2
-        self.buffer_size = BUFFER_SIZE
+        self.alpha = TEMP
         self.epsilon_p = epsilon_p
 
         # normalization
@@ -96,20 +83,20 @@ class TCSAC(Controller):
         # internal states
         self.prev_state = None
         self.action = None
-        
+        self.device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
 
         
         # buffer
         self.buffer = ComprehensivePrioritizedReplayBuffer()
         
-        self.critic1 = CriticQModel(N_OBS).to(device)
-        self.critic2 = CriticQModel(N_OBS).to(device)
-        self.critic3 = CriticQModel(N_OBS).to(device)
-        self.target_critic1 = CriticQModel(N_OBS).to(device)
-        self.target_critic2 = CriticQModel(N_OBS).to(device)
-        self.target_critic3 = CriticQModel(N_OBS).to(device)
-        self.policy_net = ActorPiModel(N_OBS).to(device)
-        self.log_alpha = torch.zeros(1, dtype=torch.float32, requires_grad=True, device=device)
+        self.critic1 = CriticQModel(N_OBS).to(self.device)
+        self.critic2 = CriticQModel(N_OBS).to(self.device)
+        self.critic3 = CriticQModel(N_OBS).to(self.device)
+        self.target_critic1 = CriticQModel(N_OBS).to(self.device)
+        self.target_critic2 = CriticQModel(N_OBS).to(self.device)
+        self.target_critic3 = CriticQModel(N_OBS).to(self.device)
+        self.policy_net = ActorPiModel(N_OBS).to(self.device)
+        self.log_alpha = torch.zeros(1, dtype=torch.float32, requires_grad=True, device=self.device)
         print('Soft Q Network (1,2,3): ', self.soft_q_net1)
         print('Policy Network: ', self.policy_net)
 
@@ -139,33 +126,16 @@ class TCSAC(Controller):
         self.actor.summary()
         self.critic1.summary()
 
-    def get_action(self, state, deterministic):
-        state = torch.FloatTensor(state).unsqueeze(0).to(device)
-        mean, log_std = self.forward(state)
-        std = log_std.exp()
-        
-        normal = Normal(0, 1)
-        z      = normal.sample(mean.shape).to(device)
-        action = self.action_range* torch.tanh(mean + std*z)
-        
-        action = self.action_range* torch.tanh(mean).detach().cpu().numpy()[0] if deterministic else action.detach().cpu().numpy()[0]
-        return action
-
-    def sample_action(self,):
-        a=torch.FloatTensor(self.num_actions).uniform_(-1, 1)
-        return self.action_range*a.numpy()
-
-    def policy(self, state, random, deterministic=False):
+    def policy(self, state, training, deterministic=False):
         # network outputs
         state = self.obs_norm.normalize(state, update=False) 
-        if not random:
+        if training:
             # reparam trick
-            nn_action = self.get_action(state, deterministic)
+           nn_action = self.sample_action(state)
         else: 
-        # Deterministic action during testing (mean of the distribution)
+        # Deterministic action -> during evaluation (deterministic) & training (stochastic)
             nn_action = self.sample_action
         
-        nn_action = np.clip(nn_action, -NN_BOUND, NN_BOUND)
 
         # Extract curtailment actions and incentive rate from nn_action
         curtailment_actions = nn_action[:-1]  
@@ -208,115 +178,117 @@ class TCSAC(Controller):
         self.target_critic2.eval()
         self.target_critic3.eval()
 
-# if len(replay_buffer) > batch_size and timestep > warmup and timestep % update_freq == 0:
-#     for i in range(update_itr):
-#         sac_trainer.update(batch_size, reward_scale=10., auto_entropy=AUTO_ENTROPY, target_entropy=-1.*action_dim)
-    def update(self): 
+    def update(self, batch_size, reward_scale=1., auto_entropy=True, target_entropy=-2, gamma = DISCOUNT_FACTOR,_lambda=WEIGHT_CRITIC,soft_tau=TARGET_NETWORK_UPDATE):
         # sample
         state, action, reward, next_state, done = self.replay_buffer.sample(batch_size) #need to add weights
-        state      = torch.FloatTensor(state).to(device)
-        next_state = torch.FloatTensor(next_state).to(device)
-        action     = torch.FloatTensor(action).to(device)
-        reward     = torch.FloatTensor(reward).unsqueeze(1).to(device)  # reward is single value, unsqueeze() to add one dim to be [reward] at the sample dim;
-        done       = torch.FloatTensor(np.float32(done)).unsqueeze(1).to(device)
+        state      = torch.FloatTensor(state).to(self.device)
+        next_state = torch.FloatTensor(next_state).to(self.device)
+        action     = torch.FloatTensor(action).to(self.device)
+        reward     = torch.FloatTensor(reward).unsqueeze(1).to(self.device)  # reward is single value, unsqueeze() to add one dim to be [reward] at the sample dim;
+        done       = torch.FloatTensor(np.float32(done)).unsqueeze(1).to(self.device)
 
         predicted_q_value1 = self.soft_q_net1(state, action)
         predicted_q_value2 = self.soft_q_net2(state, action)
         predicted_q_value3 = self.soft_q_net3(state, action)
-        new_action, log_prob, z, mean, log_std = self.policy_net.evaluate(state) # TODO start here -> need to change into diffferent
+        new_action, log_prob, z, mean, log_std = self.policy_net.evaluate(state) 
         new_next_action, next_log_prob, _, _, _ = self.policy_net.evaluate(next_state)
         reward = reward_scale * (reward - reward.mean(dim=0)) / (reward.std(dim=0) + 1e-6) # normalize with batch mean and std; plus a small number to prevent numerical problem
 
-        # update critics
-        critic_loss, target_values, td_errs = self.update_critics(state_seq_batch, state_fnn_batch, action_batch, reward_batch, next_state_seq_batch, next_state_fnn_batch, weights)
-        self.update_priority(td_errs, idxs)
-        self.learn_step_counter += 1
-
-        # update sequence model
-        if (self.sequence_model_type != 'none') and (not self.use_pretrained_sequence_model):
-            self.update_sequence_model(state_seq_batch, state_fnn_batch, action_batch, target_values)
-
-        if self.learn_step_counter % self.delay != 0:
-            return
-
-        # update actor
-        actor_loss = self.update_actor(state_seq_batch, state_fnn_batch)
-
-        # parameter noise
-        if self.noise_type == 'param':
-            self.perturb_policy()
-            d = self.calculate_distance(state_seq_batch, state_fnn_batch)
-            self.adapt_param_noise(d)
-
-        # update targets
-        self.update_target_networks()
-
-    @tf.function
-    def update_actor(self, state_seq_batch, state_fnn_batch):
-        # trainable variables
-        if self.sequence_model_type == 'none':
-            actor_vars = self.actor.trainable_variables
+    # Updating alpha wrt entropy
+        # alpha = 0.0  # trade-off between exploration (max entropy) and exploitation (max Q) 
+        if auto_entropy is True:
+            alpha_loss = -(self.log_alpha * (log_prob + target_entropy).detach()).mean()
+            # print('alpha loss: ',alpha_loss)
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            self.alpha = self.log_alpha.exp()
         else:
-            actor_vars = self.actor.get_layer('actor_mu_model').trainable_variables
+            alpha_loss = 0
+    # Compute target Q-values
+        target_q1 = self.target_critic1(next_state, new_next_action)
+        target_q23_min = torch.min(
+            self.target_critic2(next_state, new_next_action),
+            self.target_critic3(next_state, new_next_action)
+        )
+        target_q_min = _lambda * target_q1 + (1 - _lambda) * target_q23_min
+        target_q_value = reward + (1 - done) * gamma * (target_q_min - self.alpha * next_log_prob)
 
-        # gradient descent
-        with tf.GradientTape() as tape:
-            actions = self.actor([state_seq_batch, state_fnn_batch], training=True)
-            actions = self.a_norm.tf_normalize(actions)
-            q_values = self.critic1([state_seq_batch, state_fnn_batch, actions], training=True)
-            actor_loss = -tf.math.reduce_mean(q_values)
-        actor_grads = tape.gradient(actor_loss, actor_vars)
-        self.actor.optimizer.apply_gradients(zip(actor_grads, actor_vars))
+        # Compute Q-function losses
+        q_value_loss1 = self.soft_q_criterion1(predicted_q_value1, target_q_value.detach())
+        q_value_loss2 = self.soft_q_criterion2(predicted_q_value2, target_q_value.detach())
+        q_value_loss3 = self.soft_q_criterion3(predicted_q_value3, target_q_value.detach())
 
-        return actor_loss
-    
-    @tf.function
-    def update_critics(self, state_seq_batch, state_fnn_batch, action_batch, reward_batch, next_state_seq_batch, next_state_fnn_batch, weights):
-        # Issue: https://github.com/tensorflow/tensorflow/issues/35928
-        # with tf.GradientTape(persistent=True) as tape:
+    # Optimize Q-functions
+        self.soft_q_optimizer1.zero_grad()
+        q_value_loss1.backward()
+        self.soft_q_optimizer1.step()
 
-        # target actions
-        target_actions = self.target_actor([next_state_seq_batch, next_state_fnn_batch], training=True)
-        #target_actions += tf.clip_by_value(tf.random.normal(shape=(self.batch_size, self.n_action), stddev=0.2), -0.5, 0.5) this is noise
-        target_actions = tf.clip_by_value(target_actions, -NN_BOUND, NN_BOUND)
-        target_actions = self.a_norm.tf_normalize(target_actions)
+        self.soft_q_optimizer2.zero_grad()
+        q_value_loss2.backward()
+        self.soft_q_optimizer2.step()
 
-        # target values
-        target_q_value1 = self.target_critic1([next_state_seq_batch, next_state_fnn_batch, target_actions], training=True)
-        target_q_value2 = self.target_critic2([next_state_seq_batch, next_state_fnn_batch, target_actions], training=True)
-        target_q_value3 = self.target_critic2([next_state_seq_batch, next_state_fnn_batch, target_actions], training=True)
-        target_values = reward_batch + (self.critic_weight *target_q_value1) + (1-self.critic_weight)*tf.math.minimum(target_q_value2, target_q_value3) #need entropy term
+        self.soft_q_optimizer3.zero_grad()
+        q_value_loss3.backward()
+        self.soft_q_optimizer3.step()
 
-        # td errors
-        td_errs = target_values - self.critic1([state_seq_batch, state_fnn_batch, action_batch])
+        # Generate new actions for policy update
+        new_action, log_prob, _, _, _ = self.policy_net.evaluate(state)
 
-        # trainable variables
-        if self.sequence_model_type == 'none':
-            critic1_vars = self.critic1.trainable_variables
-            critic2_vars = self.critic2.trainable_variables
-        else:
-            critic1_vars = self.critic1.get_layer('critic_q_model').trainable_variables
-            critic2_vars = self.critic2.get_layer('critic_q_model_1').trainable_variables
+        # Compute policy loss
+        predicted_new_q_value = torch.min(
+            self.soft_q_net1(state, new_action),
+            self.soft_q_net2(state, new_action)
+        )
+        policy_loss = (self.alpha * log_prob - predicted_new_q_value).mean() #if doesnt work then change signs here
 
-        huber_loss = keras.losses.Huber()
-        # update critic model 1
-        with tf.GradientTape() as tape1:
-            critic_loss1 = huber_loss(weights*target_values, weights*self.critic1([state_seq_batch, state_fnn_batch, action_batch], training=True))
-        critic_grads1 = tape1.gradient(critic_loss1, critic1_vars)
-        self.critic1.optimizer.apply_gradients(zip(critic_grads1, critic1_vars))
+        # Optimize policy
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
 
-        # update critic model 2
-        with tf.GradientTape() as tape2:
-            critic_loss2 = huber_loss(weights*target_values, weights*self.critic2([state_seq_batch, state_fnn_batch, action_batch], training=True))
-        critic_grads2 = tape2.gradient(critic_loss2, critic2_vars)
-        self.critic2.optimizer.apply_gradients(zip(critic_grads2, critic2_vars))
+        # Soft update target networks
+        for target_param, param in zip(self.target_soft_q_net1.parameters(), self.soft_q_net1.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        for target_param, param in zip(self.target_soft_q_net2.parameters(), self.soft_q_net2.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        for target_param, param in zip(self.target_soft_q_net3.parameters(), self.soft_q_net3.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-        return critic_loss1, target_values, td_errs
+        return predicted_new_q_value.mean()
     
     def update_priority(self, td_errs, idxs):
         priorities = np.abs(td_errs.numpy().flatten()) + self.epsilon_p
         for idx, p in zip(idxs, priorities):
             self.buffer.update_tree(idx, p)
 
+    def train(self, max_episodes = MAX_EPISODES,max_steps = MAX_STEPS,batch_size = BATCH_SIZE):
+        env = MicrogridEnv(w1=W1, w2=W2)
+        for episode in range(max_episodes):
+            state = env.reset() 
+            episode_reward = 0
+            transitions = []
+            for _ in range(max_steps):
+                # Sample action from policy
+                if self.counter > 0:
+                    action = self.policy_net.get_action(state, deterministic=False)
+                else:
+                    action = self.policy_net.sample_action()
+                # Step environment
+                next_state, reward, done, _ = env.step(action)
+                
+                # Update networks if enough data is collected
+                if len(self.replay_buffer) > batch_size and self.counter > WARMUP and self.counter % UPDATE_FREQ == 0: 
+                    self.update(batch_size)
+                
+                state = next_state
+                episode_reward += reward
+                transitions.append((state, action, reward, next_state, done))
+                self.counter += 1
+                if done:
+                    self.replay_buffer.add_episodes((state, action, reward, next_state, done))
+                    break
+                
+            print(f"Episode {episode}, Reward: {episode_reward}")
 
     
