@@ -9,11 +9,18 @@ import numpy as np
 from pandapower.timeseries.data_sources.frame_data import DFData
 import pandas as pd
 
+
+#objective func params
+W1 = 0.5
+W2 = 0.5
+
 #comprehensivereplaybuffer
 RHO_MIN = 10 # TODO observe and change
 ETA = 0.5  
 REPLAY_BUFER_SIZE = 1e6
 BATCH_SIZE = 128
+ALPHA = 0.6 #exponent α determines how much prioritization is used, with α = 0 corresponding to the uniform case.
+BETA = 0 # importance sampling negative exponent.
 
 #SAC only
 GPU = True
@@ -53,8 +60,8 @@ IDX_PREV_DISCOMFORT = np.arange(26, 31)  # Previous discomfort: 5 indices [26, 2
 IDX_LINE_LOSSES = 31    
 
 # Action
-MAX_ACTION = np.array([0.6] * 5,[100])  #do i need to dynamically update?
-MIN_ACTION = np.array([0] * 5,[0])      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
+MAX_ACTION = np.array([0.6] * 5 + [100]) #do i need to dynamically update?
+MIN_ACTION = np.array([0] * 5 + [0])      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
 ACTION_IDX = {
     'curtail_C1': 0,               
     'curtail_C2': 1,               
@@ -198,7 +205,9 @@ price_profile_df = pd.read_csv(filepath_results + '/price_profile.csv')
 
 data_source_wind = DFData(wt_profile_df)
 data_source_sun = DFData(pv_profile_df)
-data_source_consumers_original = DFData(load_profile_df)    
+data_source_consumers_original = DFData(load_profile_df)
+
+model_path = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\model\sac_v2"
 
 
 

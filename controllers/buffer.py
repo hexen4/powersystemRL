@@ -20,7 +20,7 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
             eta (float): Recent score hyperparameter.
             kwargs: Additional arguments for base PrioritizedReplayBuffer.
         """
-        super().__init__(storage=ListStorage(max_size=capacity) , **kwargs)
+        super().__init__(alpha = ALPHA, beta = BETA, storage=ListStorage(max_size=capacity) , **kwargs)
         self.capacity = capacity
         self.rho_min = RHO_MIN
         self.eta = ETA
@@ -78,3 +78,6 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
         self.mark_update(torch.tensor(sampled_indices))
 
         return sampled_transitions
+    
+    def __len__(self):
+        return len(self.buffer)

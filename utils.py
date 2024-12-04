@@ -75,24 +75,6 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, 
 
     return new_mean, new_var, new_count
 
-class NormalizeAction:
-    def __init__(self, epsilon=1e-8):
-        self.a_rms = RunningMeanStd(shape=(N_ACTION,))
-        self.epsilon = epsilon
-
-    def normalize(self, a):
-        self.a_rms.update(a)
-        a = (a -self.a_rms.mean) / np.sqrt(self.a_rms.var + self.epsilon)
-        a = np.clip(a, -5, 5)
-        return a
-
-    def tf_normalize(self, a):
-        mean = tf.convert_to_tensor(self.a_rms.mean, dtype=tf.float32)
-        var = tf.convert_to_tensor(self.a_rms.var, dtype=tf.float32)
-        a = (a - mean) / tf.math.sqrt(var + self.epsilon)
-        a = tf.clip_by_value(a, -5, 5)
-        return a
-
 class NormalizeObservation:
     def __init__(self, shape, epsilon=1e-8):
         self.obs_rms = RunningMeanStd(shape=shape)  
@@ -120,19 +102,6 @@ class NormalizeObservation:
             self.obs_rms.mean = data['obs_mean']
             self.obs_rms.var = data['obs_var']
 
-class NormalizeReward:
-    def __init__(self, gamma=GAMMA, epsilon=1e-8):
-        self.return_rms = RunningMeanStd()
-        self.return_ = np.zeros(1)
-        self.gamma = gamma
-        self.epsilon = epsilon
-
-    def normalize(self, r):
-        self.return_ = r + self.gamma * self.return_
-        self.return_rms.update(self.return_)
-        r /= np.sqrt(self.return_rms.var + self.epsilon)
-        r = np.clip(r, -5, 5)
-        return r
 
 class RunningMeanStd(object):
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
@@ -152,22 +121,7 @@ class RunningMeanStd(object):
             self.mean, self.var, self.count, batch_mean, batch_var, batch_count)
 
 
-def normalize_state(state) -> Dict:
-    normalized_state_rnn = state[0] / np.array([P_EXCESS_MAX, C_PRICE_MAX])
-    # normalized_state_rnn = state[0] / np.array([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST, C_PRICE_MAX])
-    # normalized_state_rnn = state[0] / np.array([*P_PV_MAX_LIST, *P_WT_MAX_LIST, *P_LOAD_MAX_LIST, P_EXCESS_MAX, C_PRICE_MAX])
-    normalized_state_fnn = state[1] / SOC_MAX
 
-    return normalized_state_rnn, normalized_state_fnn
-
-
-def extra_reward(nn_bat_p_mw, valid_bat_p_mw):
-    # TODO look at paper to see what it does with penality for invalid action
-    # penalty for invalid action
-    dif = np.sum(np.abs(nn_bat_p_mw - valid_bat_p_mw))
-    dif /= (P_B10_MAX + P_B5_MAX)
-    reward = 0. if (dif < 1e-3) else (REWARD_INVALID_ACTION + dif * REWARD_INVALID_ACTION)
-    return reward
 
 # --- Plot ---
 def plot_ep_values(ep_values, train_length, epochs, ylabel):
@@ -354,61 +308,6 @@ def get_excess(pv_profile, wt_profile, load_profile, t):
 
     return excess
 
-def policy_simple(net, ids, bat5_soc, bat10_soc, bat5_max_e_mwh, bat10_max_e_mwh):
-    # TODO simple, heuristic policy that balances excess power between charging / discharging batteries. LOOK AT PAPER
-    p_pv = net.sgen.at[ids.get('pv3'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv4'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv5'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv6'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv8'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv9'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv10'), 'p_mw'] +\
-        net.sgen.at[ids.get('pv11'), 'p_mw']
-    p_wt = net.sgen.at[ids.get('wt7'), 'p_mw']
-    p_load = net.load.at[ids.get('load_r1'), 'p_mw'] +\
-        net.load.at[ids.get('load_r3'), 'p_mw'] +\
-        net.load.at[ids.get('load_r4'), 'p_mw'] +\
-        net.load.at[ids.get('load_r5'), 'p_mw'] +\
-        net.load.at[ids.get('load_r6'), 'p_mw'] +\
-        net.load.at[ids.get('load_r8'), 'p_mw'] +\
-        net.load.at[ids.get('load_r10'), 'p_mw'] +\
-        net.load.at[ids.get('load_r11'), 'p_mw']
-                        
-    p_b5_max = min((SOC_MAX - bat5_soc) * bat5_max_e_mwh / HOUR_PER_TIME_STEP, P_B5_MAX)
-    p_b5_min = max((SOC_MIN - bat5_soc) * bat5_max_e_mwh / HOUR_PER_TIME_STEP, P_B5_MIN)
-    p_b10_max = min((SOC_MAX - bat10_soc) * bat10_max_e_mwh / HOUR_PER_TIME_STEP, P_B10_MAX)
-    p_b10_min = max((SOC_MIN - bat10_soc) * bat10_max_e_mwh / HOUR_PER_TIME_STEP, P_B10_MIN)
-
-    excess = p_pv + p_wt - p_load
-    # print(f'Excess = {excess}, pv: {p_pv}, wt: {p_wt}, load: {p_load}')
-    if excess > 0:
-        # charge
-        b5_ratio = p_b5_max / (p_b5_max + p_b10_max) if (p_b5_max + p_b10_max) != 0. else 0.
-        b10_ratio = p_b10_max / (p_b5_max + p_b10_max) if (p_b5_max + p_b10_max) != 0. else 0.
-        p_b5 = min(excess * b5_ratio, p_b5_max)
-        p_b10 = min(excess * b10_ratio, p_b10_max)
-        # p_mgt5 = 0.
-        # p_mgt9 = 0.
-        # p_mgt10 = 0.
-    else:
-        # discharge
-        b5_ratio = p_b5_min / (p_b5_min + p_b10_min) if (p_b5_min + p_b10_min) != 0. else 0.
-        b10_ratio = p_b10_min / (p_b5_min + p_b10_min) if (p_b5_min + p_b10_min) != 0. else 0.
-        p_b5 = max(excess * b5_ratio, p_b5_min)
-        p_b10 = max(excess * b10_ratio, p_b10_min)
-        p_b = p_b5 + p_b10
-
-        # mgt5_ratio = P_MGT5_MAX / (P_MGT5_MAX + P_MGT9_MAX + P_MGT10_MAX)
-        # mgt9_ratio = P_MGT9_MAX / (P_MGT5_MAX + P_MGT9_MAX + P_MGT10_MAX)
-        # mgt10_ratio = P_MGT10_MAX / (P_MGT5_MAX + P_MGT9_MAX + P_MGT10_MAX)
-        # mgt5_op_point = (C_BUY - C_MGT5[1]) / C_MGT5[0]
-        # mgt9_op_point = (C_BUY - C_MGT9[1]) / C_MGT9[0]
-        # mgt10_op_point = (C_BUY - C_MGT10[1]) / C_MGT10[0]
-        # p_mgt5 = 0. if excess > p_b  else min((p_b - excess) * mgt5_ratio, mgt5_op_point)
-        # p_mgt9 = 0. if excess > p_b  else min((p_b - excess) * mgt9_ratio, mgt9_op_point)
-        # p_mgt10 = 0. if excess > p_b  else min((p_b - excess) * mgt10_ratio, mgt10_op_point)
-    
-    return np.array([p_b5, p_b10])
 
 def calculate_shape_parameters(mu_h_wind, sigma_h_wind):
     """

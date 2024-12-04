@@ -23,7 +23,7 @@ import utils
 from network_comp import *
 from controllers.baseline_controller import RandomControl, SimpleControl
 from controllers.td3_controller import TD3Agent
-from controllers.TCSAC_controller import TCSACAgent
+from TCSAC_controller import TCSACAgent
 #from controllers.ppo_controller import PPOAgent
 from setting import *
 

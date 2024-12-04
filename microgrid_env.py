@@ -9,14 +9,18 @@ from setting import *
 from gym import spaces
 from network_comp import network_comp
 from collections import deque
-class MicrogridEnv():
-    def __init__(self, w1, w2):  
+from pandapower.control.basic_controller import Controller
+
+class MicrogridEnv(Controller):
+    def __init__(self, w1, w2): 
+        
         self.H = MAX_STEPS # Number of timesteps (planning horizon)
         self.J = NO_CONSUMERS  # Number of active consumers
         self.net, _ = network_comp(0)
         self.ids = ids
-        self.current_timestep = 0
 
+        super().__init__(self.net) 
+        self.curtailment_indices = [6, 19, 11, 27, 22]
         self.w1, self.w2 = w1, w2  # Weights for objectives
         self.prev_curtailed_buffer = deque(maxlen=self.buffer)
         self.prev_P_demand_buffer = deque(maxlen=self.buffer)
@@ -32,8 +36,8 @@ class MicrogridEnv():
         self.datasource_consumers = self.original_datasource_consumers.copy()
         self.DfData_consumers = DFData(self.datasource_consumers)
         self.applied = False
-        
-    def step(self, action):
+
+    def step(self, action,time):
         #action [(power_curtailed)x5, incentive rate]
         """
         Apply an action, update the environment state, and calculate rewards and penalties.
@@ -42,19 +46,17 @@ class MicrogridEnv():
         assert self.action_space.contains(action), f"Action {action} is out of bounds!"
         scaled_action = scale_action(action)  
 
-        self.state_seq,self.state_fnn = self.update_state(scaled_action) #need to do this for st+1 ->. IC at t = 0
+        self.state = self.update_state(scaled_action,time) #need to do this for st+1 ->. IC at t = 0
         assert self.observation_space.contains(self.state), f"State {self.state} is out of bounds!"
-        _ = self.control_step(self.net, self.state_seq[IDX_LINE_LOSSES])
-        reward = self._calculate_reward(action, self.state) 
+        _ = self.control_step(self.net, self.state[IDX_LINE_LOSSES])
+        reward = self._calculate_reward(action, self.state,time) 
         self.reward_history.append(reward)
-        self.last_time_step = self.current_timestep
-        self.current_timestep += 1
         self.applied = False
         
         # TODO self.buffer.store, self.learn, if self training
-        done = self.current_timestep >= self.H
+        done = time >= self.H
 
-        return self.state, reward, done, {} # TODO make sure reward cumultative in next func.
+        return self.state, reward, done, {} 
     
     def control_step(self, net, line_losses):
         if not self.applied:
@@ -65,7 +67,7 @@ class MicrogridEnv():
             self.applied = True
         else:
             print("misaligned control step")
-    def _calculate_reward(self, scaled_action, state):
+    def _calculate_reward(self, scaled_action, state,time):
 
         generation_cost = cal_costgen(state[IDX_POWER_GEN]) 
         power_transfer_cost = cal_costpow(state[IDX_MARKET_PRICE], state[IDX_PGRID]) 
@@ -88,7 +90,7 @@ class MicrogridEnv():
 
         reward =  self.w1*(generation_cost + power_transfer_cost) - self.w2*mgo_profit - balance_penalty - generation_penalty - ramp_penalty - curtailment_penalty - daily_curtailment_penalty - consumer_incentives_penalty - incentives_limit_penalty - incentive_rate_penalty - budget_limit_penalty
         
-        log_calc_rewards(t=self.current_timestep,
+        log_calc_rewards(t=time,
         source='Reward Calculation',
         freq=5,  # Change frequency to control logging intervals
         penalties={
@@ -102,11 +104,11 @@ class MicrogridEnv():
         scaled_action=scaled_action,
         state=state)
         return reward
-    def update_state(self, action): 
+    def update_state(self, action,time): 
         next_state = [0] * N_OBS
 
         # Fetch network response values based on the action
-        line_losses, net = network_comp(TIMESTEPS = self.current_timestep)
+        line_losses, net = network_comp(TIMESTEPS = time)
 
         curtailed = np.array((action[:-1]))
         P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy()
@@ -115,7 +117,7 @@ class MicrogridEnv():
         cdg_pw = net.gen.at[ids.get('dg'), 'p_mw']
         discomforts = calculate_discomfort(curtailed, P_demand).to_numpy()
         Pgrid = np.sum(P_demand) - pv_pw - wt_pw - cdg_pw - np.sum(curtailed)
-        market_price = self.market_prices[self.current_timestep]
+        market_price = self.market_prices[time]
         
 
         next_state[IDX_POWER_GEN] = cdg_pw
@@ -141,15 +143,12 @@ class MicrogridEnv():
         """
         Reset the environment to its initial state and return the initial observation.
         """
-        self.state = self.initial_state
-        self.current_timestep = 0
+        self.state = []
         self.prev_genpower_buffer.clear()
         self.prev_curtailed_buffer.clear()
         self.prev_P_demand_buffer.clear()
         self.prev_discomforts_buffer.clear()
         self.reward_history = []
-        self.datasource_consumers = self.original_datasource_consumers.copy()
-        self.data_source_consumers = DFData(self.datasource_consumers)
         self.applied = False
         return self.state
 

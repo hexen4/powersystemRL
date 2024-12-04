@@ -15,7 +15,7 @@ import pandapower.timeseries as timeseries
 from pandapower.plotting.plotly import simple_plotly
 from pandapower.plotting.plotly import pf_res_plotly
 
-def network_comp(TIMESTEPS = TIMESTEPS):
+def network_comp(TIMESTEPS):
     net = pp.create_empty_network()
     for i in range(N_BUS): #zero-indexed  
         pp.create_bus(net, vn_kv=12.66, name=f"Bus {i}")  
@@ -54,7 +54,6 @@ def network_comp(TIMESTEPS = TIMESTEPS):
                      profile_name=f"Customer_{i}", data_source=data_source_consumers_original, initial_powerflow=False, recycle=False, run_control=True)  
     # Run power flow analysis
 
-
     print("Starting simulation with control loop...")
     pp.control.run_control(
         net,
@@ -78,7 +77,7 @@ def network_comp(TIMESTEPS = TIMESTEPS):
     
     return line_losses, net
 if __name__ == "__main__":  
-    line_losses, net = network_comp()
+    line_losses, net = network_comp(1)
     #pp.plotting.simple_plot(net, respect_switches=False, line_width=1.0, bus_size=1.0, ext_grid_size=1.0, trafo_size=1.0, plot_loads=False, plot_sgens=False, load_size=1.0, sgen_size=1.0, switch_size=2.0, switch_distance=1.0, plot_line_switches=False, scale_size=True, bus_color='b', line_color='grey', trafo_color='k', ext_grid_color='y', switch_color='k', library='igraph', show_plot=True, ax=None)
     #pf_res_plotly(net)
     
