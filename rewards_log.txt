@@ -1,0 +1,144 @@
+2024-12-10 19:51:41,470 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:41,525 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:41,547 - INFO - Creating controller 34 of type <class 'microgrid_env.MicrogridEnv'> 
+2024-12-10 19:51:41,947 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:41,974 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:41,995 - INFO - --- Reward Calculation ---
+2024-12-10 19:51:41,996 - INFO - Reward: -13577.061
+2024-12-10 19:51:41,996 - INFO - --- Penalties and Profit ---
+2024-12-10 19:51:41,996 - INFO - generation_cost: -2796.678
+2024-12-10 19:51:41,996 - INFO - power_transfer_cost: 1500.000
+2024-12-10 19:51:41,996 - INFO - mgo_profit: 20.785
+2024-12-10 19:51:41,996 - INFO - balance_penalty: 3714.743
+2024-12-10 19:51:41,997 - INFO - generation_penalty: 3929.806
+2024-12-10 19:51:41,997 - INFO - ramp_penalty: 3934.012
+2024-12-10 19:51:41,997 - INFO - curtailment_penalty: 0.734
+2024-12-10 19:51:41,997 - INFO - daily_curtailment_penalty: 0.734
+2024-12-10 19:51:41,997 - INFO - consumer_incentives_penalty: 0.000
+2024-12-10 19:51:41,997 - INFO - incentive_rate_penalty: 0.000
+2024-12-10 19:51:41,997 - INFO - budget_limit_penalty: 1338.299
+2024-12-10 19:51:41,998 - INFO - Scaled Action: [ 0.09914335  0.27443383  0.22038406  0.04268303  0.10627198 22.02174664]
+2024-12-10 19:51:41,999 - INFO - time step: 0
+2024-12-10 19:51:41,999 - INFO - State:
+2024-12-10 19:51:41,999 - INFO -   IDX_0: -28
+2024-12-10 19:51:41,999 - INFO -   IDX_1: 0
+2024-12-10 19:51:41,999 - INFO -   IDX_2: 50
+2024-12-10 19:51:42,000 - INFO -   IDX_3: 30
+2024-12-10 19:51:42,000 - INFO -   IDX_4: 0
+2024-12-10 19:51:42,000 - INFO -   IDX_5: 0
+2024-12-10 19:51:42,000 - INFO -   IDX_6: 0
+2024-12-10 19:51:42,000 - INFO -   IDX_7: 0
+2024-12-10 19:51:42,000 - INFO -   IDX_8: 2
+2024-12-10 19:51:42,001 - INFO -   IDX_9: 28
+2024-12-10 19:51:42,001 - INFO -   IDX_10: 0
+2024-12-10 19:51:42,001 - INFO -   IDX_11: 0
+2024-12-10 19:51:42,001 - INFO -   IDX_12: 0
+2024-12-10 19:51:42,001 - INFO -   IDX_13: 0
+2024-12-10 19:51:42,001 - INFO -   IDX_14: 0
+2024-12-10 19:51:42,001 - INFO -   IDX_15: 0
+2024-12-10 19:51:42,002 - INFO -   IDX_16: 0
+2024-12-10 19:51:42,002 - INFO -   IDX_17: 0
+2024-12-10 19:51:42,002 - INFO -   IDX_18: 0
+2024-12-10 19:51:42,002 - INFO -   IDX_19: 0
+2024-12-10 19:51:42,002 - INFO -   IDX_20: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_21: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_22: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_23: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_24: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_25: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_26: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_27: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_28: 0
+2024-12-10 19:51:42,003 - INFO -   IDX_29: 0
+2024-12-10 19:51:42,004 - INFO -   IDX_30: 0
+2024-12-10 19:51:42,004 - INFO -   IDX_31: 0
+2024-12-10 19:51:42,004 - INFO -   IDX_32: 0
+2024-12-10 19:51:42,004 - INFO -   IDX_33: 0
+2024-12-10 19:51:42,004 - INFO -   IDX_34: 0
+2024-12-10 19:51:42,004 - INFO -   IDX_35: 0
+2024-12-10 19:51:42,005 - INFO -   IDX_36: 50
+2024-12-10 19:51:42,005 - INFO -   IDX_37: 0
+2024-12-10 19:51:42,402 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:42,429 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:42,453 - INFO - --- Reward Calculation ---
+2024-12-10 19:51:42,453 - INFO - Reward: -279283701.146
+2024-12-10 19:51:42,453 - INFO - --- Penalties and Profit ---
+2024-12-10 19:51:42,453 - INFO - generation_cost: -5592.678
+2024-12-10 19:51:42,453 - INFO - power_transfer_cost: 2950.000
+2024-12-10 19:51:42,454 - INFO - mgo_profit: 110.002
+2024-12-10 19:51:42,454 - INFO - balance_penalty: 3699.187
+2024-12-10 19:51:42,454 - INFO - generation_penalty: 3929.806
+2024-12-10 19:51:42,454 - INFO - ramp_penalty: 0.013
+2024-12-10 19:51:42,454 - INFO - curtailment_penalty: 5.400
+2024-12-10 19:51:42,454 - INFO - daily_curtailment_penalty: 5.400
+2024-12-10 19:51:42,455 - INFO - consumer_incentives_penalty: 270321465.000
+2024-12-10 19:51:42,455 - INFO - incentive_rate_penalty: 2000.000
+2024-12-10 19:51:42,455 - INFO - budget_limit_penalty: 8951220.000
+2024-12-10 19:51:42,455 - INFO - Scaled Action: [6.00000000e-01 4.66704369e-06 4.44889069e-05 6.00000000e-01
+ 6.00000000e-01 0.00000000e+00]
+2024-12-10 19:51:42,456 - INFO - time step: 1
+2024-12-10 19:51:42,456 - INFO - State:
+2024-12-10 19:51:42,456 - INFO -   IDX_0: -28
+2024-12-10 19:51:42,456 - INFO -   IDX_1: -2796
+2024-12-10 19:51:42,456 - INFO -   IDX_2: 50
+2024-12-10 19:51:42,456 - INFO -   IDX_3: 29
+2024-12-10 19:51:42,457 - INFO -   IDX_4: 1500
+2024-12-10 19:51:42,457 - INFO -   IDX_5: 20
+2024-12-10 19:51:42,457 - INFO -   IDX_6: 0
+2024-12-10 19:51:42,457 - INFO -   IDX_7: 0
+2024-12-10 19:51:42,457 - INFO -   IDX_8: 2
+2024-12-10 19:51:42,457 - INFO -   IDX_9: 28
+2024-12-10 19:51:42,458 - INFO -   IDX_10: -28
+2024-12-10 19:51:42,458 - INFO -   IDX_11: 0
+2024-12-10 19:51:42,458 - INFO -   IDX_12: 0
+2024-12-10 19:51:42,458 - INFO -   IDX_13: 0
+2024-12-10 19:51:42,458 - INFO -   IDX_14: 0
+2024-12-10 19:51:42,458 - INFO -   IDX_15: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_16: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_17: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_18: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_19: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_20: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_21: 0
+2024-12-10 19:51:42,459 - INFO -   IDX_22: 0
+2024-12-10 19:51:42,460 - INFO -   IDX_23: 0
+2024-12-10 19:51:42,460 - INFO -   IDX_24: 0
+2024-12-10 19:51:42,460 - INFO -   IDX_25: 0
+2024-12-10 19:51:42,460 - INFO -   IDX_26: 12
+2024-12-10 19:51:42,460 - INFO -   IDX_27: 10000
+2024-12-10 19:51:42,460 - INFO -   IDX_28: 10000
+2024-12-10 19:51:42,461 - INFO -   IDX_29: 2
+2024-12-10 19:51:42,461 - INFO -   IDX_30: 4032
+2024-12-10 19:51:42,461 - INFO -   IDX_31: 0
+2024-12-10 19:51:42,461 - INFO -   IDX_32: 0
+2024-12-10 19:51:42,461 - INFO -   IDX_33: 0
+2024-12-10 19:51:42,461 - INFO -   IDX_34: 0
+2024-12-10 19:51:42,461 - INFO -   IDX_35: 0
+2024-12-10 19:51:42,461 - INFO -   IDX_36: 50
+2024-12-10 19:51:42,461 - INFO -   IDX_37: 1338
+2024-12-10 19:51:42,854 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)
+2024-12-10 19:51:42,880 - WARNING - numba cannot be imported and numba functions are disabled.
+Probably the execution is slow.
+Please install numba to gain a massive speedup.
+(or if you prefer slow execution, set the flag numba=False to avoid this warning!)

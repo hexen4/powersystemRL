@@ -13,6 +13,8 @@ import pandas as pd
 #objective func params
 W1 = 0.5
 W2 = 0.5
+EPSILON = 0.5 #incentive per unit curtailed
+PENALTY_FACTOR = 5
 
 #comprehensivereplaybuffer
 RHO_MIN = 10 # TODO observe and change
@@ -44,24 +46,29 @@ LR_CRITIC = 0.001
 TARGET_NETWORK_UPDATE = 0.001
 NN_BOUND = 1
 
-
 # State
 IDX_POWER_GEN = 0
-IDX_SOLAR = 1
-IDX_WIND = 2
-IDX_CUSTOMER_PMW = np.arange(3, 8)  # Customer power: 5 indices [3, 4, 5, 6, 7]
-IDX_PGRID = 8
-IDX_MARKET_PRICE = 9
-IDX_DISCOMFORT = np.arange(10, 15)  # Discomfort: 5 indices [10, 11, 12, 13, 14]
-IDX_PREV_GENPOWER = 15
-IDX_PREV_CURTAILED = np.arange(16, 21)  # Previous curtailed: 5 indices [16, 17, 18, 19, 20]
-IDX_PREV_DEMAND = np.arange(21, 26)  # Previous demand: 5 indices [21, 22, 23, 24, 25]
-IDX_PREV_DISCOMFORT = np.arange(26, 31)  # Previous discomfort: 5 indices [26, 27, 28, 29, 30]
-IDX_LINE_LOSSES = 31    
+IDX_PREV_GEN_COST = 1
+IDX_MARKET_PRICE = 2
+IDX_PGRID = 3
+IDX_PREV_POWER_TRANSFER_COST = 4
+PREV_MGO_PROFIT = 5
+IDX_SOLAR = 6
+IDX_WIND = 7
+IDX_TOTAL_LOAD = 8
+IDX_LINE_LOSSES = 9
+IDX_PREV_GENPOWER = 10
+IDX_ACTIVE_PMW = np.arange(11, 16) # 5 consumers]
+IDX_PREV_CURTAILED = np.arange(16, 21) # 5 consumers
+IDX_PREV_ACTIVE_PMW = np.arange(21, 26) # 5 consumers
+IDX_DISCOMFORT = np.arange(26, 31) # 5 consumers    
+IDX_PREV_ACTIVE_BENEFIT = np.arange(31, 36) # 5 consumers
+IDX_MINMARKET_PRICE = 36
+IDX_PREV_BUDGET = 37
 
 # Action
 MAX_ACTION = np.array([0.6] * 5 + [100]) #do i need to dynamically update?
-MIN_ACTION = np.array([0] * 5 + [0])      # [incentive_rate_min, curtail_c1_min, ..., curtail_c5_min]
+MIN_ACTION = np.array([0] * 5 + [0])      # [curtail_c1_min, ..., curtail_c5_min,incentive_rate_min]
 ACTION_IDX = {
     'curtail_C1': 0,               
     'curtail_C2': 1,               
@@ -72,12 +79,11 @@ ACTION_IDX = {
 }
 
 N_ACTION = len(MAX_ACTION) 
-N_OBS = IDX_LINE_LOSSES + 1
+N_OBS = IDX_PREV_BUDGET + 1
 ACTION_SHAPE = (N_ACTION,)
 STATE_SHAPE = (N_OBS,)
 
 # --- Cost Parameters ---
-EPSILON = 0.5 #incentive per unit curtailed
 WTRATED = 500 / 1000 #MW
 v_opt = 12 
 v_in = 3
@@ -111,11 +117,8 @@ ids = {
 'pv': 0,
 'wt': 1,
 'dg': 2}
-for i in range(1, 33):  
-    ids[f'C{i}'] = f'C{i - 1}'  # Map "C1" -> "C0", "C2" -> "C1", etc.
 CONSUMER_BETA = [1,2,2,3,3]
 CONSUMER_ZETA = [1,0.9,0.7,0.6,0.4]
-TIMESTEPS = range(0,24)
 PEAK_P_DEMAND = 3715 / 1000 #MW
 PEAK_Q_DEMAND = 2300 / 1000 #MVAR
 N_BUS = 33
@@ -194,13 +197,10 @@ line_data = [
 (31, 32, 0.3410, 0.5302)]
 
 filepath_results = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived"
-power_data_path_wind = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\wt_profile.csv"
-power_data_path_sun = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\pv_profile.csv"
-power_data_consumers =r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived\load_profile.csv"
 
 pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv')   
 wt_profile_df = pd.read_csv(filepath_results + '/wt_profile.csv')
-load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv') / 1000 
+load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv', index_col=0) / 1000 
 price_profile_df = pd.read_csv(filepath_results + '/price_profile.csv')
 
 data_source_wind = DFData(wt_profile_df)

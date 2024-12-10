@@ -5,47 +5,41 @@ func:
 import numpy as np
 from utils import *
 from setting import *
-def cal_costgen(power_gen): 
+def cal_costgen(power_gen,prev_power_gen): 
     """
     Calculate the generation cost based on power generation.
     """
-    cost = A1 * power_gen ** 2 + A2 * power_gen + A3
+    cost = (A1 * power_gen ** 2 + A2 * power_gen + A3) + prev_power_gen
     return cost
     # if kwargs:
     #     log_cost_info(profit, kwargs['t'], source='MGO_profit',**kwargs)
-def cal_costpow(market_price, power_transfer):
+def cal_costpow(market_price,power_transfer,prev_cost_pow):
     """
     Calculate the cost based on power transfer.
     """
-    cost = market_price * power_transfer
+    cost = market_price * power_transfer + prev_cost_pow
     return cost
 
-def MGO_profit(alpha, curtailed, incentive):
+def MGO_profit(alpha, curtailed,incentive,prev_mgo_profit):
     """
     Calculate the profit of the Microgrid Operator (MGO) based on curtailment and incentives.
     """
-    if not isinstance(curtailed, (np.ndarray)):
-        curtailed = np.array(curtailed)
-    profit = np.sum((alpha-incentive) * curtailed)
+    profit = np.sum((alpha-incentive) * curtailed) + prev_mgo_profit
     return profit
 
 
 # --- Constraint Functions ---
 
-def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, P_demand, curtailed, P_loss): 
+def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, total_load, curtailed, P_loss): 
     """
     Check the power balance constraint and return a penalty if it is not satisfied.
+    total_load = sum(P_demand)
+    curtailed = J x 1
+    P_loss = P_gen
     """
-    if not isinstance(P_demand, np.ndarray):
-        P_demand = np.array(P_demand)
-    if not isinstance(curtailed, np.ndarray):
-        curtailed = np.array(curtailed)
-    
-    if len(P_demand) != len(curtailed):
-        raise ValueError("P_demand and curtailments must have the same length, representing each consumer.")
     
     total_supply = P_grid + P_gen + P_solar + P_wind
-    total_demand = sum(P_demand) - sum(curtailed) + P_loss 
+    total_demand = total_load - sum(curtailed) + P_loss 
     if not np.isclose(total_supply, total_demand, atol=1e-5): # TODO check atol
         penalty = abs(total_supply - total_demand) ** 2 # TODO check penalty term
         return PENALTY_FACTOR * penalty
@@ -72,18 +66,14 @@ def ramp_rate_constraint(P_gen, P_gen_prev):
         return PENALTY_FACTOR * (delta - PRAMPDOWN) ** 2
     return 0
 
-def curtailment_limit_constraint(curtailed, P_demand, mu1=0, mu2=0.6):
+def curtailment_limit_constraint(curtailed, P_active_demand, mu1=0, mu2=0.6): 
     """
     Ensure curtailments are within allowable limits.
     """
-    if curtailed.shape != P_demand.shape:
+    if curtailed.shape != P_active_demand.shape:
         raise ValueError("Shapes of 'curtailed' and 'P_demand' must match.")
-    if not isinstance(curtailed, np.ndarray):
-        curtailed = np.array(curtailed)
-    if not isinstance(P_demand, np.ndarray):
-        P_demand = np.array(P_demand)
-    min_curtailment = mu1 * P_demand
-    max_curtailment = mu2 * P_demand
+    min_curtailment = mu1 * P_active_demand
+    max_curtailment = mu2 * P_active_demand
 
     below_min_penalty = np.sum((min_curtailment - curtailed)[curtailed < min_curtailment] ** 2)
     above_max_penalty = np.sum((curtailed - max_curtailment)[curtailed > max_curtailment] ** 2)
@@ -92,19 +82,14 @@ def curtailment_limit_constraint(curtailed, P_demand, mu1=0, mu2=0.6):
     penalty = below_min_penalty + above_max_penalty
     return penalty * PENALTY_FACTOR
 
-def daily_curtailment_limit(curtailed, P_demand, prev_curtailed,prev_P_demand, lambda_=0.4):
-    if curtailed.shape != P_demand.shape:
-        raise ValueError("Shapes of 'curtailed' and 'P_demand' must match.")
-    if not isinstance(curtailed, np.ndarray):
-        curtailed = np.array(curtailed)
-    if not isinstance(P_demand, np.ndarray):
-        P_demand = np.array(P_demand)
-    if not isinstance(prev_curtailed, np.ndarray):
-        prev_curtailed = np.array(prev_curtailed)
-    if not isinstance(prev_P_demand, np.ndarray):
-        prev_P_demand = np.array(prev_P_demand)
-
-    max_curtailment = lambda_ * (P_demand + prev_P_demand)
+def daily_curtailment_limit(curtailed, P_active_demand, prev_curtailed, prev_P_active_demand, lambda_=0.4):
+    """
+    P_active_demand = J x 1
+    curtailed = J x 1
+    prev_curtailed = J x 1
+    prev_P_active_demand = J x 1
+    """
+    max_curtailment = lambda_ * P_active_demand + prev_P_active_demand
     total_curtailment = curtailed + prev_curtailed
     violations = total_curtailment > max_curtailment
 
@@ -112,40 +97,39 @@ def daily_curtailment_limit(curtailed, P_demand, prev_curtailed,prev_P_demand, l
     penalty = np.sum((total_curtailment[violations] - max_curtailment[violations]) ** 2)
     return PENALTY_FACTOR * penalty
 
-def consumer_incentives_constraint(incentive, curtailed, discomforts, epsilon= EPSILON):
+def indivdiual_consumer_benefit(incentive, curtailed, discomforts, prev_benefit, epsilon= EPSILON):
     """
-    Ensure each consumer has sufficient benefit to offset discomfort from curtailment.
+    incentive = 1 x 1
+    curtailed = J x 1
+    discomforts = J x 1
+    prev_benefit = J x 1
+    epsilon = J x 1 (but scalar in this case, assuming everyone has same attitude)
     """
-    if not isinstance(curtailed, np.ndarray):
-        curtailed = np.array(curtailed)
-    if not isinstance(discomforts, np.ndarray):
-        discomforts = np.array(discomforts)
+
     benefit_diff = epsilon * incentive * curtailed - (1 - epsilon) * discomforts
 
     # Identify violations where the condition is not met
-    violations = benefit_diff < 0
+    violations = benefit_diff + prev_benefit < 0
 
     # Calculate the penalty for violations
     penalty = np.sum((benefit_diff[violations]) ** 2)
 
     return PENALTY_FACTOR * penalty
 
-def incentives_limit_constraint(incentive, curtailed, discomforts,prev_curtailed, prev_discomforts,epsilon= EPSILON):
+def benefit_limit_constraint(incentive, curtailed, discomforts, prev_benefit,epsilon= EPSILON):
     """
     Ensure consumers with higher rankings have greater benefits.
+    incentive = 1 x 1
+    curtailed = J x 1
+    discomforts = J x 1
+    prev_curtailed = J x 1
+    prev_discomforts = J x 1
+    assuming epsilon equal => no need for this 
     """
-    if not isinstance(curtailed, np.ndarray):
-        curtailed = np.array(curtailed)
-    if not isinstance(discomforts, np.ndarray):
-        discomforts = np.array(discomforts)
-    if not isinstance(prev_curtailed, np.ndarray):
-        prev_curtailed = np.array(prev_curtailed)
-    if not isinstance(prev_discomforts, np.ndarray):
-        prev_discomforts = np.array(prev_discomforts)
+
 
     # Calculate current and previous benefit values
-    current_benefit = epsilon * incentive * curtailed - (1 - epsilon) * discomforts
-    prev_benefit = epsilon * incentive * prev_curtailed - (1 - epsilon) * prev_discomforts
+    current_benefit = (epsilon * incentive * curtailed - (1 - epsilon) * discomforts) + prev_benefit
 
     # Identify violations where current benefit is less than the previous benefit
     violations = current_benefit < prev_benefit
@@ -155,21 +139,26 @@ def incentives_limit_constraint(incentive, curtailed, discomforts,prev_curtailed
 
     return penalty * PENALTY_FACTOR
 
-def incentive_rate_constraint(incentive, market_price, eta=0.4):
+def incentive_rate_constraint(incentive, market_price, min_market_price,eta=0.4):
     """
     Ensure incentive rate remains within the allowable range.
+
     """
-    if incentive < market_price * eta:
-        return PENALTY_FACTOR * (market_price * eta - incentive) ** 2
-    elif incentive > market_price * eta:
-        return PENALTY_FACTOR * (incentive - eta * market_price) ** 2
+    min_market_price = min(market_price,min_market_price)
+    if incentive > min_market_price:
+        return PENALTY_FACTOR * (min_market_price - incentive) ** 2
+    elif incentive < min_market_price * eta:
+        return PENALTY_FACTOR * (incentive - eta * min_market_price) ** 2
     return 0
 
-def budget_limit_constraint(incentives, curtailed, budget = MB): # TODO set this
+def budget_limit_constraint(incentives, curtailed, prev_budget, budget = MB): # TODO set this
     """
-    Ensure that the total incentive payment remains within the budget.
+    incentives = 1x1
+    curtailed = J x 1
+    prev_budget = 1x1
+
     """
-    total_cost = sum(incentives * curtailed)
+    total_cost = sum(incentives * curtailed) + prev_budget
     if total_cost > budget:
         return PENALTY_FACTOR * (total_cost - budget) ** 2
     return 0

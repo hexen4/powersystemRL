@@ -80,4 +80,4 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
         return sampled_transitions
     
     def __len__(self):
-        return len(self.buffer)
+        return len(self.storage)

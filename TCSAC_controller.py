@@ -151,7 +151,7 @@ class TCSAC():
             alpha_loss = -(self.log_alpha * (log_prob + target_entropy).detach()).mean()
             # print('alpha loss: ',alpha_loss)
             self.alpha_optimizer.zero_grad()
-            alpha_loss.backward()
+            alpha_loss  .backward()
             self.alpha_optimizer.step()
             self.alpha = self.log_alpha.exp()
         else:
@@ -222,7 +222,7 @@ class TCSAC():
             state = env.reset() 
             episode_reward = 0
             transitions = []
-            for time in range(max_steps):
+            for time in range(int(max_steps)):
                 # Sample action from policy
                 if self.counter > 0:
                     action = self.policy_net.get_action(state, deterministic=False)

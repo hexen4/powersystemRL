@@ -8,8 +8,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class ActorPiModel(nn.Module):
     def __init__(self, num_inputs ,n_action=N_ACTION,init_w=3e-3, log_std_min=-20, log_std_max=2):
         super().__init__()
+        self.num_actions = N_ACTION
         self.log_std_min = log_std_min
         self.log_std_max = log_std_max
+        self.action_range = 1
 
         self.linear1 = nn.Linear(num_inputs, 128)
         self.linear2 = nn.Linear(128, 64)
@@ -42,7 +44,7 @@ class ActorPiModel(nn.Module):
         normal = Normal(0, 1)
         z      = normal.sample(mean.shape) 
         action_0 = torch.tanh(mean + std*z.to(device)) # TanhNormal distribution as actions; reparameterization trick
-        action = self.action_range*action_0
+        action = (action_0 + 1) * 0.5
         # The log-likelihood here is for the TanhNorm distribution instead of only Gaussian distribution. \
         # The TanhNorm forces the Gaussian with infinite action range to be finite. \
         # For the three terms in this log-likelihood estimation: \
@@ -53,7 +55,7 @@ class ActorPiModel(nn.Module):
         # the epsilon is for preventing the negative cases in log; \
         # (3). the third term is caused by the action range I used in this code is not (-1, 1) but with \
         # an arbitrary action range, which is slightly different from original paper -> deleted
-        log_prob = Normal(mean, std).log_prob(mean+ std*z.to(device)) - torch.log(1. - action_0.pow(2) + epsilon) 
+        log_prob = Normal(mean, std).log_prob(mean+ std*z.to(device)) - torch.log(1. - action_0.pow(2) + epsilon) -  np.log(self.action_range)
         # both dims of normal.log_prob and -log(1-a**2) are (N,dim_of_action); 
         # the Normal.log_prob outputs the same dim of input features instead of 1 dim probability, 
         # needs sum up across the features dim to get 1 dim prob; or else use Multivariate Normal.
@@ -68,12 +70,12 @@ class ActorPiModel(nn.Module):
         normal = Normal(0, 1)
         z      = normal.sample(mean.shape).to(device)
         action = self.action_range* torch.tanh(mean + std*z)
-        
+        action = (action + 1) * 0.5 
         action = self.action_range* torch.tanh(mean).detach().cpu().numpy()[0] if deterministic else action.detach().cpu().numpy()[0]
         return action
 
     def sample_action(self,):
-        a=torch.FloatTensor(self.num_actions).uniform_(-1, 1)
+        a=torch.FloatTensor(self.num_actions).uniform_(0, 1)
         return self.action_range*a.numpy()
     
     

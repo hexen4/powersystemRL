@@ -49,6 +49,15 @@ import pandas as pd
 import tensorflow as tf
 from scipy.special import gamma
 from setting import *
+# Configure logging to write to a file
+logging.basicConfig(
+    level=logging.INFO,  # Set the logging level
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Set the format of the log messages
+    handlers=[
+        logging.FileHandler("rewards_log.txt"),  # Write logs to a file
+        logging.StreamHandler()  # Optionally, also print logs to the console
+    ]
+)
 
 def normalize_df_column(df, column_name):
     col_min = df[column_name].min()
@@ -57,10 +66,9 @@ def normalize_df_column(df, column_name):
 
 
 # --- Action Scaling --- [-1,1] -> [min, max]
-def scale_action(nn_action, min_action, max_action):
-    nn_action = np.clip(nn_action, -1., 1.)
-    return (nn_action + 1) * (max_action - min_action) / 2 + min_action
+def scale_action(nn_action, min_action=MIN_ACTION, max_action=MAX_ACTION):
 
+    return min_action + (nn_action) * (max_action - min_action)
 # --- Normalization ---
 def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, batch_count):
     delta = batch_mean - mean
@@ -86,6 +94,7 @@ class NormalizeObservation:
         normalized_state = (state - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon)
         normalized_state = np.clip(normalized_state, -5, 5)
         return normalized_state
+
 
     def save(self, dir):
         fpath = Path(os.path.join(dir, 'obs.pkl'))
@@ -257,8 +266,7 @@ def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_a
     Logs penalties, profit, and reward information at specified time intervals.
     """
     if t % freq == 0:
-        penalties = kwargs.get('penalties', {})
-        reward = kwargs.get('reward', None)
+
 
         # Log reward, profit, and penalties
         logging.info(f'--- {source} ---')
@@ -268,6 +276,8 @@ def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_a
             logging.info(f'{penalty_name}: {penalty_value:.3f}')
         if scaled_action is not None:
             logging.info(f"Scaled Action: {scaled_action}")
+
+        logging.info(f"time step: {t}")
 
         # Log state
         if state is not None:
