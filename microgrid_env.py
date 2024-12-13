@@ -10,18 +10,18 @@ from gym.spaces import Dict, Box, Discrete
 from gym import spaces
 from network_comp import *
 from collections import deque
-from pandapower.control.basic_controller import Controller
 
-class MicrogridEnv(Controller):
+
+class MicrogridEnv():
     def __init__(self, w1, w2): 
         
-        self.H = MAX_STEPS # Number of timesteps (planning horizon)
+        self.H = MAX_STEPS - 1# Number of timesteps (planning horizon)
         self.J = NO_CONSUMERS  # Number of active consumers
-        _,self.net = network_comp((0,0))
+        _,self.net = network_comp((0,0),scaled_action=[0]*6,prev_line_losses=0)
         self.ids = ids
         self.customer_ids = [f"C{i}" for i in range(32)]
-        self.buffer = 5 # Number of previous timesteps to store for state
-        super().__init__(self.net) 
+        self.buffer = 1# Number of previous timesteps to store for state
+        #super().__init__(self.net) 
         self.curtailment_indices = ["C8", "C21", "C13", "C29", "C24"]
         self.w1, self.w2 = w1, w2  # Weights for objectives
         self.prev_curtailed_buffer = deque(maxlen=self.buffer)
@@ -33,7 +33,6 @@ class MicrogridEnv(Controller):
         self.original_datasource_consumers = load_profile_df
         self.datasource_consumers = self.original_datasource_consumers.copy()
         self.DfData_consumers = DFData(self.datasource_consumers)   
-        self.applied = False
 
     def step(self, action,time):
         #action [(power_curtailed)x5, incentive rate]
@@ -41,28 +40,14 @@ class MicrogridEnv(Controller):
         Apply an action, update the environment state, and calculate rewards and penalties.
         """
         # Update state based on the action taken
-        #assert self.action_space.contains(action), f"Action {action} is out of bounds!"
-        scaled_action = scale_action(np.array(action)) # TODO scaled action wrong
-        #assert np.all(scaled_action >= MIN_ACTION) and np.all(scaled_action <= MAX_ACTION), "Scaled action is out of bounds!"
-        self.state,reward = self.update_state(self.state, scaled_action,time) 
-        #assert self.observation_space.contains(self.state), f"State {self.state} is out of bounds!"
-        _ = self.control_step(scaled_action,self.net, self.state[IDX_POWER_GEN])
-        self.applied = False
-        
-        # TODO self.buffer.store, self.learn, if self training
+        scaled_action = scale_action(np.array(action)) #s_t, a_t, logging s_t, a_t, r_t
+        self.state,reward = self.update_state(self.state, scaled_action,time)  #s_t+1, r_t
+
         done = time >= self.H
 
         return self.state, reward, done, {} 
     
-    def control_step(self, scaled_action,net, line_losses):
-        if not self.applied:
-            load_values = net.load.loc[self.curtailment_indices, 'p_mw'].to_numpy()
-            updated_load_values = np.maximum(load_values - scaled_action[:-1], 0)
-            net.load.loc[self.curtailment_indices, 'p_mw'] = updated_load_values
-            net.gen.loc[self.ids.get('dg'), 'p_mw'] = line_losses
-            self.applied = True
-        else:
-            print("misaligned control step")
+
     def _calculate_reward(self, scaled_action, state,time):
         curtailed = scaled_action[:-1]
         incentive = scaled_action[-1]   
@@ -77,12 +62,12 @@ class MicrogridEnv(Controller):
         curtailment_penalty = curtailment_limit_constraint(curtailed, state[IDX_ACTIVE_PMW]) 
         daily_curtailment_penalty = daily_curtailment_limit(curtailed, state[IDX_ACTIVE_PMW],    
                                                             state[IDX_PREV_CURTAILED], state[IDX_PREV_ACTIVE_PMW])
-        consumer_incentives_penalty = indivdiual_consumer_benefit(incentive, curtailed, 
+        consumer_incentives_penalty,prev_benefit = indivdiual_consumer_benefit(incentive, curtailed, 
                                                                      state[IDX_DISCOMFORT], state[IDX_PREV_ACTIVE_BENEFIT]) 
         #incentives_limit_penalty = benefit_limit_constraint(incentive, curtailed, 
         #                                                       state[IDX_DISCOMFORT], state[PREV_ACTIVE_BENEFIT])
         incentive_rate_penalty = incentive_rate_constraint(incentive, state[IDX_MARKET_PRICE],state[IDX_MINMARKET_PRICE])
-        budget_limit_penalty = budget_limit_constraint(incentive, curtailed, state[IDX_PREV_BUDGET])
+        budget_limit_penalty, prev_budget = budget_limit_constraint(incentive, curtailed, state[IDX_PREV_BUDGET])
 
         reward =  self.w1*(generation_cost + power_transfer_cost) - self.w2*mgo_profit - balance_penalty - generation_penalty - ramp_penalty - curtailment_penalty - daily_curtailment_penalty - consumer_incentives_penalty -  incentive_rate_penalty - budget_limit_penalty
 
@@ -101,17 +86,17 @@ class MicrogridEnv(Controller):
         scaled_action=scaled_action,
         state=state)
 
-        return reward,generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty
+        return reward,generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget
     def update_state(self, state, action,time): 
-        reward, generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty= self._calculate_reward(action, state,time)
-        next_state = state.copy()
+        reward, generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget= self._calculate_reward(action, state,time)
+        next_state = state.astype(np.float32)
 
         # Fetch network response values based on the action
-        line_losses, net = network_comp(TIMESTEPS = (time,time))
+        line_losses, net = network_comp(TIMESTEPS = (time,time),scaled_action = action,prev_line_losses = state[IDX_LINE_LOSSES])
 
-        curtailed = (action[:-1])
-        P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy()
-        P_demand_active = net.load.loc[self.curtailment_indices, 'p_mw'].to_numpy()
+        curtailed = [action[:-1]]
+        P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy() # TODO curtailed needs to be clipped, invalid actions
+        P_demand_active = net.load.loc[self.curtailment_indices, 'p_mw']
         pv_pw = net.sgen.at[ids.get('pv'), 'p_mw']
         wt_pw = net.gen.at[ids.get('wt'), 'p_mw']
         cdg_pw = net.gen.at[ids.get('dg'), 'p_mw']
@@ -120,36 +105,36 @@ class MicrogridEnv(Controller):
         total_load = np.sum(P_demand)
         Pgrid = total_load - pv_pw - wt_pw - cdg_pw - np.sum(curtailed)
         market_price = self.market_prices[time]
-        
 
-        next_state[IDX_POWER_GEN] = cdg_pw
-        next_state[IDX_PREV_GEN_COST] = generation_cost
-        next_state[IDX_MARKET_PRICE] = market_price
-        next_state[IDX_PGRID] = Pgrid
-        next_state[IDX_PREV_POWER_TRANSFER_COST] = power_transfer_cost
-        next_state[PREV_MGO_PROFIT] = mgo_profit
-        next_state[IDX_SOLAR] = pv_pw
-        next_state[IDX_WIND] = wt_pw
-        next_state[IDX_TOTAL_LOAD] = total_load
-        next_state[IDX_LINE_LOSSES] = line_losses
-        next_state[IDX_PREV_GENPOWER] = state[IDX_POWER_GEN]
-        next_state[IDX_ACTIVE_PMW] = P_demand_active
-        next_state[IDX_PREV_CURTAILED] = self.prev_curtailed_buffer if len(self.prev_curtailed_buffer) > 1 else [0] * 5
-        next_state[IDX_PREV_ACTIVE_PMW] =self.prev_P_active_demand_buffer if len(self.prev_P_active_demand_buffer) > 1 else [0] * 5
-        next_state[IDX_DISCOMFORT] = discomforts
-        next_state[IDX_PREV_ACTIVE_BENEFIT] = consumer_incentives_penalty
-        next_state[IDX_MINMARKET_PRICE] = min(next_state[IDX_MARKET_PRICE],state[IDX_MINMARKET_PRICE])
-        next_state[IDX_PREV_BUDGET] = budget_limit_penalty
-        # Append current values to the tracking buffers
         self.prev_curtailed_buffer.append(curtailed)
-        self.prev_P_active_demand_buffer.append(P_demand)
+
+        next_state[IDX_POWER_GEN] = np.float32(cdg_pw)
+        next_state[IDX_PREV_GEN_COST] = np.float32(generation_cost)
+        next_state[IDX_MARKET_PRICE] = np.float32(market_price)
+        next_state[IDX_PGRID] = np.float32(Pgrid)
+        next_state[IDX_PREV_POWER_TRANSFER_COST] = np.float32(power_transfer_cost)
+        next_state[PREV_MGO_PROFIT] = np.float32(mgo_profit)
+        next_state[IDX_SOLAR] = np.float32(pv_pw)
+        next_state[IDX_WIND] = np.float32(wt_pw)
+        next_state[IDX_TOTAL_LOAD] = np.float32(total_load)
+        next_state[IDX_LINE_LOSSES] = np.float32(line_losses)
+        next_state[IDX_PREV_GENPOWER] = np.float32(state[IDX_POWER_GEN])
+        next_state[IDX_ACTIVE_PMW] = np.array(P_demand_active, dtype=np.float32)  # If P_demand_active is an array
+        next_state[IDX_PREV_CURTAILED] = np.array(self.prev_curtailed_buffer if len(self.prev_curtailed_buffer) > 0 else [0] * 5, dtype=np.float32)
+        next_state[IDX_PREV_ACTIVE_PMW] = np.array(self.prev_P_active_demand_buffer if len(self.prev_P_active_demand_buffer) > 0 else [0] * 5, dtype=np.float32)
+        next_state[IDX_DISCOMFORT] = np.array(discomforts, dtype=np.float32)  # If discomforts is an array
+        next_state[IDX_PREV_ACTIVE_BENEFIT] = np.float32(prev_benefit)
+        next_state[IDX_MINMARKET_PRICE] = np.float32(min(next_state[IDX_MARKET_PRICE], state[IDX_MINMARKET_PRICE]))
+        next_state[IDX_PREV_BUDGET] = np.float32(prev_budget)
+ 
+        self.prev_P_active_demand_buffer.append(P_demand_active*lambda_)
 
         return next_state, reward
     def reset(self):
         """
         Reset the environment to its initial state and return the initial observation.
         """
-        line_losses, net = network_comp(TIMESTEPS=(0, 0))
+        line_losses, net = network_comp((0,0),scaled_action=[0]*6,prev_line_losses=0)
 
         # Initialize state variables using network and profiles
         P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy()
@@ -181,8 +166,8 @@ class MicrogridEnv(Controller):
         # Clear buffers for historical tracking
         self.prev_curtailed_buffer.clear()
         self.prev_P_active_demand_buffer.clear()
-        self.prev_curtailed_buffer.append([0] * 5)
-        self.prev_P_active_demand_buffer.append(P_demand_active)
+        #self.prev_curtailed_buffer.append([0] * 5)
+        #self.prev_P_active_demand_buffer.append(P_demand_active)
         return self.state
 
     def close(self):

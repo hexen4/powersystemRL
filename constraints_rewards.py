@@ -82,7 +82,7 @@ def curtailment_limit_constraint(curtailed, P_active_demand, mu1=0, mu2=0.6):
     penalty = below_min_penalty + above_max_penalty
     return penalty * PENALTY_FACTOR
 
-def daily_curtailment_limit(curtailed, P_active_demand, prev_curtailed, prev_P_active_demand, lambda_=0.4):
+def daily_curtailment_limit(curtailed, P_active_demand, prev_curtailed, prev_P_active_demand, lambda_=lambda_):
     """
     P_active_demand = J x 1
     curtailed = J x 1
@@ -106,7 +106,7 @@ def indivdiual_consumer_benefit(incentive, curtailed, discomforts, prev_benefit,
     epsilon = J x 1 (but scalar in this case, assuming everyone has same attitude)
     """
 
-    benefit_diff = epsilon * incentive * curtailed - (1 - epsilon) * discomforts
+    benefit_diff = (epsilon * incentive * curtailed - (1 - epsilon) * discomforts) + prev_benefit
 
     # Identify violations where the condition is not met
     violations = benefit_diff + prev_benefit < 0
@@ -114,7 +114,7 @@ def indivdiual_consumer_benefit(incentive, curtailed, discomforts, prev_benefit,
     # Calculate the penalty for violations
     penalty = np.sum((benefit_diff[violations]) ** 2)
 
-    return PENALTY_FACTOR * penalty
+    return PENALTY_FACTOR * penalty,benefit_diff
 
 def benefit_limit_constraint(incentive, curtailed, discomforts, prev_benefit,epsilon= EPSILON):
     """
@@ -160,5 +160,5 @@ def budget_limit_constraint(incentives, curtailed, prev_budget, budget = MB): # 
     """
     total_cost = sum(incentives * curtailed) + prev_budget
     if total_cost > budget:
-        return PENALTY_FACTOR * (total_cost - budget) ** 2
-    return 0
+        return (PENALTY_FACTOR * (total_cost - budget) ** 2), total_cost
+    return 0, total_cost

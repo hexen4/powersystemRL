@@ -41,7 +41,7 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
 
         # Assign recent score to all transitions in the episode
         for t, transition in enumerate(transitions):
-            state, action, reward, next_state,done = transition
+            state, action, reward, next_state,done = transition # TODO fix this line
             rho_f = reward if done else 0  # Terminal state reward
             rho = rho_e + rho_f
             transition_with_priority = (state, action, reward, next_state, done, rho)

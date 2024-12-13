@@ -13,8 +13,63 @@ import matplotlib.pyplot as plt
 import pandapower.timeseries as timeseries
 from pandapower.plotting.plotly import simple_plotly
 from pandapower.plotting.plotly import pf_res_plotly
+from pandapower.control.basic_controller import Controller
 
-def network_comp(TIMESTEPS):
+class DG_controller(Controller):
+    """
+    Custom DG Controller for managing distributed generation with curtailment and line loss control.
+    """
+    def __init__(self, net, element_index, scaled_action, prev_line_losses, 
+                 data_source=None, order=0, level=0, **kwargs):
+        super().__init__(net, in_service=True, recycle=False, order=order, level=level, **kwargs)
+
+        # Attributes for distributed generation
+        self.element_index = element_index  # Index of the DG in the network
+        self.curtailment_indices = ["C8", "C21", "C13", "C29", "C24"]
+        self.scaled_action = scaled_action
+        self.prev_line_losses = prev_line_losses
+        self.applied = False
+
+        # Profile-related attributes
+        self.data_source = data_source
+        self.last_time_step = None
+
+    def is_converged(self, net):
+        """
+        Check if the control step has already been applied in this iteration.
+        """
+        return self.applied
+
+    def write_to_net(self, net):
+        """
+        Write updated power and state to the net.
+        """
+        # Update curtailed loads
+        load_values = net.load.loc[self.curtailment_indices, "p_mw"].to_numpy()
+        updated_load_values = np.maximum(load_values - self.scaled_action[:-1], 0)
+        net.load.loc[self.curtailment_indices, "p_mw"] = updated_load_values
+
+        # Update DG power based on previous line losses
+        net.gen.loc[self.element_index, "p_mw"] = self.prev_line_losses
+
+    def control_step(self, net):
+        """
+        Execute the control logic to adjust loads and generation based on action and state.
+        """
+        self.write_to_net(net)
+        self.applied = True
+
+    def time_step(self, net, time):
+        """
+        Update action or state variables at each simulation timestep.
+        """
+        if self.last_time_step is not None:
+            # Custom logic to manage attributes over time
+            pass  # Update logic for time-series attributes if needed
+        self.last_time_step = time
+        self.applied = False  # Reset for next control step
+
+def network_comp(TIMESTEPS,scaled_action,prev_line_losses):
     net = pp.create_empty_network()
     for i in range(N_BUS): #zero-indexed  
         pp.create_bus(net, vn_kv=12.66, name=f"Bus {i}")  
@@ -28,10 +83,9 @@ def network_comp(TIMESTEPS):
     #  gen -> voltage controlled PV nodes. sgen -> no voltage control
     pv1 = pp.create_sgen(net, bus=13, p_mw=0, q_mvar=0, name="PV1", index = 0)
     wt1 = pp.create_gen(net, bus=4, p_mw=0.5, min_p_mw = 0, max_p_mw = WTRATED, vm_pu=1.0, name="WT1", index = 1)
-    cdg1 = pp.create_gen(net, bus=11, p_mw=0.07, min_p_mw=PGEN_MIN, max_p_mw=PGEN_MAX, vm_pu=1.0, name="CDG1", index = 2)
-
+    cdg1 = pp.create_gen(net, bus=11, p_mw=0, min_p_mw=PGEN_MIN, max_p_mw=PGEN_MAX, vm_pu=1.0, name="CDG1", index = 2)
+    dg_controller = DG_controller(net=net,element_index=2, scaled_action=scaled_action,prev_line_losses=prev_line_losses,order=1)
     single_step = False
-    consumers = {}
     for i, bus in enumerate(range(32)):
         pp.create_load(
             net, 
@@ -49,20 +103,15 @@ def network_comp(TIMESTEPS):
                  profile_name="P_wind", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_wind)
     ConstControl(net, element='sgen', variable='p_mw', element_index=pv1, 
                  profile_name="P_solar", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_sun)
-       
     # Run power flow analysis
-
-
     
     if not single_step: 
         #ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results)  
         
         #print(pp.diagnostic(net))
-        timeseries.run_timeseries(net, time_steps = TIMESTEPS)
+        timeseries.run_timeseries(net, time_steps = TIMESTEPS, numba = False)
         #print("Time series simulation completed.")
-        line_losses = (net.res_line['p_from_mw'] - net.res_line['p_to_mw']).sum()
-
-        net.gen.at[cdg1, 'p_mw'] = line_losses
+        line_losses = net.res_line['pl_mw'].sum()
     else:
         #print("Starting simulation with control loop...")
         
@@ -74,13 +123,13 @@ def network_comp(TIMESTEPS):
         )
         #print("Control loop simulation completed.")
 
-    # Calculate line losses
-    line_losses = np.abs((net.res_line['p_from_mw'] - net.res_line['p_to_mw']).sum())
+        # Calculate line losses
+        line_losses = net.res_line['pl_mw'].sum()
 
     return line_losses, net
  
 #if __name__ == "__main__":
-    #line_losses, net = network_comp((0,0))
+#    line_losses, net = network_comp((0,0),scaled_action=[0.01,0.01,0.01,0.01,0.01,0.1],prev_line_losses=0)
     #pp.plotting.simple_plot(net, respect_switches=False, line_width=1.0, bus_size=1.0, ext_grid_size=1.0, trafo_size=1.0, plot_loads=False, plot_sgens=False, load_size=1.0, sgen_size=1.0, switch_size=2.0, switch_distance=1.0, plot_line_switches=False, scale_size=True, bus_color='b', line_color='grey', trafo_color='k', ext_grid_color='y', switch_color='k', library='igraph', show_plot=True, ax=None)  
     
     #

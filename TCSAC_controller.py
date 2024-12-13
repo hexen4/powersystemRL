@@ -213,7 +213,7 @@ class TCSAC():
         plt.figure(figsize=(20,5))
         plt.plot(rewards)
         plt.savefig('sac_v2.png')
-        #plt.show()
+        plt.show()
     
     def train(self, max_episodes = MAX_EPISODES,max_steps = MAX_STEPS,batch_size = BATCH_SIZE):
         env = MicrogridEnv(w1=W1, w2=W2)
@@ -241,7 +241,7 @@ class TCSAC():
                 transitions.append((state, action, reward, next_state, done))
                 self.counter += 1
                 if done:
-                    self.buffer.add_episodes((state, action, reward, next_state, done))
+                    self.buffer.add_episodes((state, action, reward, next_state, done)) # TODO need to add whole episode
                     break
                 
             if eps % 20 == 0 and eps>0: # plot and model saving interval
