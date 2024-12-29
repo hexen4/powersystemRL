@@ -131,13 +131,11 @@ class TCSAC():
 
     def update(self, batch_size, reward_scale=1., auto_entropy=True, target_entropy=-2, gamma = DISCOUNT_FACTOR,_lambda=WEIGHT_CRITIC,soft_tau=TARGET_NETWORK_UPDATE):
         # sample
-        state, action, reward, next_state, done = self.buffer.sample(batch_size) #need to add weights
+        state, action, reward, next_state,_ = self.buffer.sample(batch_size) #need to add weights
         state      = torch.FloatTensor(state).to(self.device)
         next_state = torch.FloatTensor(next_state).to(self.device)
         action     = torch.FloatTensor(action).to(self.device)
         reward     = torch.FloatTensor(reward).unsqueeze(1).to(self.device)  # reward is single value, unsqueeze() to add one dim to be [reward] at the sample dim;
-        done       = torch.FloatTensor(np.float32(done)).unsqueeze(1).to(self.device)
-
         predicted_q_value1 = self.soft_q_net1(state, action)
         predicted_q_value2 = self.soft_q_net2(state, action)
         predicted_q_value3 = self.soft_q_net3(state, action)
@@ -221,7 +219,7 @@ class TCSAC():
         for eps in range(max_episodes):
             state = env.reset() 
             episode_reward = 0
-            transitions = []
+            transitions = [None] * int(max_steps)
             for time in range(int(max_steps)):
                 # Sample action from policy
                 if self.counter > 0:
@@ -230,7 +228,7 @@ class TCSAC():
                     action = self.policy_net.sample_action()
                 # Step environment
                 next_state, reward, done, _ = env.step(action,time)
-                #next_state = self.obs_norm.normalize(state, update=False)
+                #next_state = self.obs_norm.normalize(state, update=False) # TODO do i need to normalise state?
                 
                 # Update networks if enough data is collected
                 if self.buffer.__len__() > batch_size and self.counter > WARMUP and self.counter % UPDATE_FREQ == 0: 
@@ -238,10 +236,10 @@ class TCSAC():
                 
                 state = next_state
                 episode_reward += reward
-                transitions.append((state, action, reward, next_state, done))
+                transitions[time] = [torch.tensor(state), torch.tensor(action), torch.tensor(next_state), torch.tensor(reward)]
                 self.counter += 1
                 if done:
-                    self.buffer.add_episodes((state, action, reward, next_state, done)) # TODO need to add whole episode
+                    self.buffer.add_episodes(transitions,eps) 
                     break
                 
             if eps % 20 == 0 and eps>0: # plot and model saving interval

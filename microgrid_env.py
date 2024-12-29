@@ -21,7 +21,7 @@ class MicrogridEnv():
         self.ids = ids
         self.customer_ids = [f"C{i}" for i in range(32)]
         self.buffer = 1# Number of previous timesteps to store for state
-        #super().__init__(self.net) 
+
         self.curtailment_indices = ["C8", "C21", "C13", "C29", "C24"]
         self.w1, self.w2 = w1, w2  # Weights for objectives
         self.prev_curtailed_buffer = deque(maxlen=self.buffer)
@@ -71,20 +71,20 @@ class MicrogridEnv():
 
         reward =  self.w1*(generation_cost + power_transfer_cost) - self.w2*mgo_profit - balance_penalty - generation_penalty - ramp_penalty - curtailment_penalty - daily_curtailment_penalty - consumer_incentives_penalty -  incentive_rate_penalty - budget_limit_penalty
 
-        log_calc_rewards(t=time,
-        source='Reward Calculation',
-        freq=1, 
-        penalties={
-            "generation_cost": generation_cost,"power_transfer_cost": power_transfer_cost,"mgo_profit": mgo_profit,
-            "balance_penalty": balance_penalty,"generation_penalty": generation_penalty,"ramp_penalty": ramp_penalty,
-            "curtailment_penalty": curtailment_penalty,"daily_curtailment_penalty": daily_curtailment_penalty,
-            "consumer_incentives_penalty": consumer_incentives_penalty,
-            #"incentives_limit_penalty": incentives_limit_penalty,
-            "incentive_rate_penalty": incentive_rate_penalty,"budget_limit_penalty": budget_limit_penalty,
-        },
-        reward=reward,
-        scaled_action=scaled_action,
-        state=state)
+        # log_calc_rewards(t=time,
+        # source='Reward Calculation',
+        # freq=1, 
+        # penalties={
+        #     "generation_cost": generation_cost,"power_transfer_cost": power_transfer_cost,"mgo_profit": mgo_profit,
+        #     "balance_penalty": balance_penalty,"generation_penalty": generation_penalty,"ramp_penalty": ramp_penalty,
+        #     "curtailment_penalty": curtailment_penalty,"daily_curtailment_penalty": daily_curtailment_penalty,
+        #     "consumer_incentives_penalty": consumer_incentives_penalty,
+        #     #"incentives_limit_penalty": incentives_limit_penalty,
+        #     "incentive_rate_penalty": incentive_rate_penalty,"budget_limit_penalty": budget_limit_penalty,
+        # },
+        # reward=reward,
+        # scaled_action=scaled_action,
+        # state=state)
 
         return reward,generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget
     def update_state(self, state, action,time): 
@@ -119,10 +119,10 @@ class MicrogridEnv():
         next_state[IDX_TOTAL_LOAD] = np.float32(total_load)
         next_state[IDX_LINE_LOSSES] = np.float32(line_losses)
         next_state[IDX_PREV_GENPOWER] = np.float32(state[IDX_POWER_GEN])
-        next_state[IDX_ACTIVE_PMW] = np.array(P_demand_active, dtype=np.float32)  # If P_demand_active is an array
+        next_state[IDX_ACTIVE_PMW] = np.array(P_demand_active, dtype=np.float32)
         next_state[IDX_PREV_CURTAILED] = np.array(self.prev_curtailed_buffer if len(self.prev_curtailed_buffer) > 0 else [0] * 5, dtype=np.float32)
         next_state[IDX_PREV_ACTIVE_PMW] = np.array(self.prev_P_active_demand_buffer if len(self.prev_P_active_demand_buffer) > 0 else [0] * 5, dtype=np.float32)
-        next_state[IDX_DISCOMFORT] = np.array(discomforts, dtype=np.float32)  # If discomforts is an array
+        next_state[IDX_DISCOMFORT] = np.array(discomforts, dtype=np.float32) 
         next_state[IDX_PREV_ACTIVE_BENEFIT] = np.float32(prev_benefit)
         next_state[IDX_MINMARKET_PRICE] = np.float32(min(next_state[IDX_MARKET_PRICE], state[IDX_MINMARKET_PRICE]))
         next_state[IDX_PREV_BUDGET] = np.float32(prev_budget)
@@ -157,21 +157,15 @@ class MicrogridEnv():
         self.state[IDX_LINE_LOSSES] = line_losses
         self.state[IDX_ACTIVE_PMW] = P_demand_active
         self.state[IDX_DISCOMFORT] = calculate_discomfort([0] * len(P_demand_active), P_demand_active)
-        self.state[IDX_MINMARKET_PRICE] = market_price  # Initial min market price
-        self.state[IDX_PREV_GEN_COST] = 0  # No previous generation cost initially
-        self.state[IDX_PREV_POWER_TRANSFER_COST] = 0  # No previous power transfer cost
-        self.state[IDX_PREV_ACTIVE_BENEFIT] = 0  # No previous benefit penalty
-        self.state[IDX_PREV_BUDGET] = 0  # No previous budget penalty
+        self.state[IDX_MINMARKET_PRICE] = market_price 
+        self.state[IDX_PREV_GEN_COST] = 0  
+        self.state[IDX_PREV_POWER_TRANSFER_COST] = 0  
+        self.state[IDX_PREV_ACTIVE_BENEFIT] = 0  
+        self.state[IDX_PREV_BUDGET] = 0 
         
         # Clear buffers for historical tracking
         self.prev_curtailed_buffer.clear()
         self.prev_P_active_demand_buffer.clear()
-        #self.prev_curtailed_buffer.append([0] * 5)
-        #self.prev_P_active_demand_buffer.append(P_demand_active)
+
         return self.state
 
-    def close(self):
-        """
-        Perform any necessary cleanup.
-        """
-        pass  # Implement cleanup logic if needed

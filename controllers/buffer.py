@@ -7,7 +7,8 @@ class
 from torchrl.data import PrioritizedReplayBuffer, ListStorage
 import numpy as np
 import torch
-from setting import *
+from .. import setting
+
 
 class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
     def __init__(self, capacity = REPLAY_BUFER_SIZE, eta=0.9, **kwargs):
@@ -25,7 +26,7 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
         self.rho_min = RHO_MIN
         self.eta = ETA
 
-    def add_episodes(self, transitions):
+    def add_episodes(self, transitions,episode_counter):
         """
         Adds an entire episode to the replay buffer, calculating the recent score ρe.
 
@@ -33,19 +34,18 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
             transitions (list): List of transition tuples (state, action, reward, next_state, done).
             episode_id (int): Unique identifier for the episode.
         """
-        N = self.capacity
-        episode_length = len(transitions)
+       
+        #episode_length = len(transitions)
 
         # Calculate ρe for the episode
-        rho_e = max((N * self.eta **(1000/ episode_length)), self.rho_min) # TODO need counter for current stage    
+        rho_e = max(self.capacity * self.eta **(1000/(episode_counter+1)), self.rho_min) # TODO need counter for current stage    
 
         # Assign recent score to all transitions in the episode
-        for t, transition in enumerate(transitions):
-            state, action, reward, next_state,done = transition # TODO fix this line
-            rho_f = reward if done else 0  # Terminal state reward
-            rho = rho_e + rho_f
-            transition_with_priority = (state, action, reward, next_state, done, rho)
-            super().add(transition_with_priority)  # Add to base buffer
+        last_transition = transitions[-1]
+        rho = rho_e + last_transition[-1]
+        for transition in transitions:
+            transition.append(rho)
+            super().add(transition) # TODO need to convert to tensor
 
     def sample(self, batch_size):
         """
@@ -62,22 +62,49 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
         H2, info2 = super().sample(batch_size, return_info=True)
 
         # Combine H1 and H2
-        combined = list(zip(H1, info1["index"])) + list(zip(H2, info2["index"]))
-
+        #combined = list(zip(H1, info1["index"])) + list(zip(H2, info2["index"]))
+        combined = [H1,H2]
         # Sort combined transitions by priority score (ρ)
-        sorted_combined = sorted(combined, key=lambda x: x[0][-1], reverse=True)
+        sorted_combined = sorted(combined, key=lambda x: x[-1], reverse=True)
 
         # Select top batch_size transitions
         top_transitions = sorted_combined[:batch_size]
 
-        # Extract transitions and their indices
-        sampled_transitions = [t[0] for t in top_transitions]
-        sampled_indices = [t[1] for t in top_transitions]
+        # # Extract transitions and their indices
+        # sampled_transitions = [t[0] for t in top_transitions]
+        # sampled_indices = [t[1] for t in top_transitions]
 
-        # Update priority indices to mark as updated
-        self.mark_update(torch.tensor(sampled_indices))
+        # # Update priority indices to mark as updated
+        # self.mark_update(torch.tensor(sampled_indices))
 
-        return sampled_transitions
+        return top_transitions
     
     def __len__(self):
         return len(self.storage)
+
+
+
+
+        # TODO need to sample based on priority value? not randomly? what priority value is being set? i.e. how it is smapling
+
+
+if __name__ == "main":
+    buffer = ExtendedPrioritizedReplayBuffer()
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],1)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],2)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],3)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],4)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],5)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],6)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],7)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],8)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],9)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],10)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],11)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],12)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],13)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],14)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],15)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],16)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],17)
+    buffer.add_episodes([1,2,3,4,5,6,7,8,9,10],18)

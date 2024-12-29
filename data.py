@@ -6,7 +6,6 @@ def create_unit_profile(csv_all):
     """
     Process and normalize solar, wind, load, and price data from a CSV.
     """
-    solar_wind_speeds = pd.read_excel('./data/downloaded data/dataexport_20241105T125259.xlsx')
     # Extract relevant dataframes from the input CSV
     pv_df = csv_all[['mu_solar(kW/m^2)', 'sigma_solar(kW/m^2)']]
     #pv_df['s_h'] = solar_wind_speeds['Shortwave Radiation'].iloc[5:29].values
