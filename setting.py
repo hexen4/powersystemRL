@@ -15,13 +15,13 @@ lambda_ = 0.4 #daily curtailment limit
 W1 = 0.5
 W2 = 0.5
 EPSILON = 0.5 #incentive per unit curtailed
-PENALTY_FACTOR = 5
+PENALTY_FACTOR = 3
 
 #comprehensivereplaybuffer
 RHO_MIN = 10 # TODO observe and change
 ETA = 0.5  
 REPLAY_BUFER_SIZE = 1e6
-BATCH_SIZE = 1 #128
+BATCH_SIZE = 128 #128
 ALPHA = 0.6 #exponent α determines how much prioritization is used, with α = 0 corresponding to the uniform case.
 BETA = 0 # importance sampling negative exponent.
 
@@ -38,7 +38,7 @@ TEMP = 0.1
 MAX_EPISODES = 8000
 HOUR_PER_TIME_STEP = 1
 MAX_STEPS = 24 / HOUR_PER_TIME_STEP
-WARMUP = 1 * BATCH_SIZE #20
+WARMUP = 5 * BATCH_SIZE #20
 UPDATE_FREQ = 5
 
 # NN Hyperparameters
@@ -69,14 +69,14 @@ IDX_PREV_BUDGET = 37
 
 # Action
 #MAX_ACTION = np.array([0.42] * 5 + [100]) #do i need to dynamically update?
-MAX_ACTION = np.array([0.2] * 5 + [100]) #do i need to dynamically update?
+MAX_ACTION = np.array([0.06,0.06,0.09,0.09,0.15] + [100]) #do i need to dynamically update?
 MIN_ACTION = np.array([0] * 5 + [0])      # [curtail_c1_min, ..., curtail_c5_min,incentive_rate_min]
 ACTION_IDX = {
-    'curtail_C1': 0,               
-    'curtail_C2': 1,               
-    'curtail_C3': 2,               
-    'curtail_C4': 3,              
-    'curtail_C5': 4,               
+    'curtail_C8': 0,               
+    'curtail_C21': 1,               
+    'curtail_C13': 2,               
+    'curtail_C29': 3,              
+    'curtail_C24': 4,               
     'incentive_rate': 5            
 }
 
@@ -198,7 +198,7 @@ line_data = [
 (30, 31, 0.3105, 0.3619),
 (31, 32, 0.3410, 0.5302)]
 
-filepath_results = r"C:\Users\jlhb83\Desktop\Python Projects\powersystemRL\data\derived"
+filepath_results = r"C:\Users\rando\Desktop\uni y4\powersystemRL\data\derived"
 
 pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv')   
 wt_profile_df = pd.read_csv(filepath_results + '/wt_profile.csv')

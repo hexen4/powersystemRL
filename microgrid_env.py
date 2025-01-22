@@ -69,24 +69,24 @@ class MicrogridEnv():
         incentive_rate_penalty = incentive_rate_constraint(incentive, state[IDX_MARKET_PRICE],state[IDX_MINMARKET_PRICE])
         budget_limit_penalty, prev_budget = budget_limit_constraint(incentive, curtailed, state[IDX_PREV_BUDGET])
 
-        reward =  self.w1*(generation_cost + power_transfer_cost) - self.w2*mgo_profit - balance_penalty - generation_penalty - ramp_penalty - curtailment_penalty - daily_curtailment_penalty - consumer_incentives_penalty -  incentive_rate_penalty - budget_limit_penalty
+        reward =  - self.w1*(generation_cost + power_transfer_cost) + self.w2*mgo_profit - balance_penalty - generation_penalty - ramp_penalty - curtailment_penalty - daily_curtailment_penalty - consumer_incentives_penalty -  incentive_rate_penalty - budget_limit_penalty
 
-        # log_calc_rewards(t=time,
-        # source='Reward Calculation',
-        # freq=1, 
-        # penalties={
-        #     "generation_cost": generation_cost,"power_transfer_cost": power_transfer_cost,"mgo_profit": mgo_profit,
-        #     "balance_penalty": balance_penalty,"generation_penalty": generation_penalty,"ramp_penalty": ramp_penalty,
-        #     "curtailment_penalty": curtailment_penalty,"daily_curtailment_penalty": daily_curtailment_penalty,
-        #     "consumer_incentives_penalty": consumer_incentives_penalty,
-        #     #"incentives_limit_penalty": incentives_limit_penalty,
-        #     "incentive_rate_penalty": incentive_rate_penalty,"budget_limit_penalty": budget_limit_penalty,
-        # },
-        # reward=reward,
-        # scaled_action=scaled_action,
-        # state=state)
+        log_calc_rewards(t=time,
+        source='Reward Calculation',
+        freq=1, 
+        penalties={
+            "generation_cost": generation_cost,"power_transfer_cost": power_transfer_cost,"mgo_profit": mgo_profit,
+            "balance_penalty": balance_penalty,"generation_penalty": generation_penalty,"ramp_penalty": ramp_penalty,
+            "curtailment_penalty": curtailment_penalty,"daily_curtailment_penalty": daily_curtailment_penalty,
+            "consumer_incentives_penalty": consumer_incentives_penalty,
+            #"incentives_limit_penalty": incentives_limit_penalty,
+            "incentive_rate_penalty": incentive_rate_penalty,"budget_limit_penalty": budget_limit_penalty,
+        },
+        reward=reward,
+        scaled_action=scaled_action,
+        state=state)
 
-        return reward,generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget
+        return reward.astype(np.float32),generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget
     def update_state(self, state, action,time): 
         reward, generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget= self._calculate_reward(action, state,time)
         next_state = state.astype(np.float32)
@@ -101,7 +101,7 @@ class MicrogridEnv():
         wt_pw = net.gen.at[ids.get('wt'), 'p_mw']
         cdg_pw = net.gen.at[ids.get('dg'), 'p_mw']
         discomforts = calculate_discomfort(curtailed, P_demand_active) #only 5 customers!
-        discomforts = np.clip(discomforts,-10000,10000)
+        discomforts = np.clip(discomforts,-100,100)
         total_load = np.sum(P_demand)
         Pgrid = total_load - pv_pw - wt_pw - cdg_pw - np.sum(curtailed)
         market_price = self.market_prices[time]

@@ -11,8 +11,7 @@ def cal_costgen(power_gen,prev_power_gen):
     """
     cost = (A1 * power_gen ** 2 + A2 * power_gen + A3) + prev_power_gen
     return cost
-    # if kwargs:
-    #     log_cost_info(profit, kwargs['t'], source='MGO_profit',**kwargs)
+
 def cal_costpow(market_price,power_transfer,prev_cost_pow):
     """
     Calculate the cost based on power transfer.

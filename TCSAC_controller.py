@@ -31,7 +31,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from controllers.models import ActorPiModel, CriticQModel
-from controllers.buffer import ExtendedPrioritizedReplayBuffer
+from buffer import ExtendedPrioritizedReplayBuffer
 from setting import *
 import utils
 import matplotlib.pyplot as plt
@@ -129,18 +129,19 @@ class TCSAC():
         self.target_critic2.eval()
         self.target_critic3.eval()
 
-    def update(self, batch_size, reward_scale=1., auto_entropy=True, target_entropy=-2, gamma = DISCOUNT_FACTOR,_lambda=WEIGHT_CRITIC,soft_tau=TARGET_NETWORK_UPDATE):
+    def update(self, batch_size, reward_scale=1., auto_entropy=False, target_entropy=-2, gamma = DISCOUNT_FACTOR,_lambda=WEIGHT_CRITIC,soft_tau=TARGET_NETWORK_UPDATE):
         # sample
-        state, action, reward, next_state,_ = self.buffer.sample(batch_size) #need to add weights
-        state      = torch.FloatTensor(state).to(self.device)
-        next_state = torch.FloatTensor(next_state).to(self.device)
-        action     = torch.FloatTensor(action).to(self.device)
-        reward     = torch.FloatTensor(reward).unsqueeze(1).to(self.device)  # reward is single value, unsqueeze() to add one dim to be [reward] at the sample dim;
-        predicted_q_value1 = self.soft_q_net1(state, action)
-        predicted_q_value2 = self.soft_q_net2(state, action)
-        predicted_q_value3 = self.soft_q_net3(state, action)
+        state, action,next_state,reward,done,_= self.buffer.sample(batch_size) #need to add weights. what size does tis returtn? think! need to do this in batches
+        state      = torch.FloatTensor(state).to(self.device) # [batch_size, state_dim]
+        next_state = torch.FloatTensor(next_state).to(self.device) # [batch_size, state_dim]
+        action     = torch.FloatTensor(action).to(self.device) # [batch_size, action_dim]
+        reward     = torch.FloatTensor(reward).unsqueeze(1).to(self.device)  # [batch_size, 1] # reward is single value, unsqueeze() to add one dim to be [reward] at the sample dim;
+        done = torch.FloatTensor(np.float32(done)).unsqueeze(1).to(self.device)      # [batch_size, 1]
+        predicted_q_value1 = self.critic1(state, action)
+        predicted_q_value2 = self.critic2(state, action)
+        predicted_q_value3 = self.critic3(state, action)
         new_action, log_prob, z, mean, log_std = self.policy_net.evaluate(state) 
-        new_next_action, next_log_prob, _, _, _ = self.policy_net.evaluate(next_state)
+        new_next_action, next_log_prob, _, _, _ = self.policy_net.evaluate(next_state) 
         reward = reward_scale * (reward - reward.mean(dim=0)) / (reward.std(dim=0) + 1e-6) # normalize with batch mean and std; plus a small number to prevent numerical problem
 
     # Updating alpha wrt entropy
@@ -161,7 +162,7 @@ class TCSAC():
             self.target_critic3(next_state, new_next_action)
         )
         target_q_min = _lambda * target_q1 + (1 - _lambda) * target_q23_min
-        target_q_value = reward + (1 - done) * gamma * (target_q_min - self.alpha * next_log_prob)
+        target_q_value = reward + (1 - done) * gamma * (target_q_min - self.alpha * next_log_prob) #next_log_prob should be q value? FUCK OFF 
 
         # Compute Q-function losses
         q_value_loss1 = self.soft_q_criterion1(predicted_q_value1, target_q_value.detach())
@@ -186,8 +187,8 @@ class TCSAC():
 
         # Compute policy loss
         predicted_new_q_value = torch.min(
-            self.soft_q_net1(state, new_action),
-            self.soft_q_net2(state, new_action)
+            self.critic1(state, new_action),
+            self.critic2(state, new_action)
         )
         policy_loss = (self.alpha * log_prob - predicted_new_q_value).mean() #if doesnt work then change signs here
 
@@ -197,22 +198,32 @@ class TCSAC():
         self.policy_optimizer.step()
 
         # Soft update target networks
-        for target_param, param in zip(self.target_soft_q_net1.parameters(), self.soft_q_net1.parameters()):
+        for target_param, param in zip(self.target_critic1.parameters(), self.critic1.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-        for target_param, param in zip(self.target_soft_q_net2.parameters(), self.soft_q_net2.parameters()):
+        for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-        for target_param, param in zip(self.target_soft_q_net3.parameters(), self.soft_q_net3.parameters()):
+        for target_param, param in zip(self.target_critic3.parameters(), self.critic3.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
         return predicted_new_q_value.mean()
 
-    def plot(rewards):
+    def plot(self, rewards):
         clear_output(True)
-        plt.figure(figsize=(20,5))
+        plt.figure(figsize=(10, 6))  # Adjust the figure size to match the first plot
         plt.plot(rewards)
+        
+        # Set font sizes to match the first plot
+        plt.title("Reward vs Timestep", fontsize=30)
+        plt.xlabel('Timestep', fontsize=24)
+        plt.ylabel('Reward', fontsize=24)
+        plt.xticks(fontsize=24)
+        plt.yticks(fontsize=24)
+        
+        plt.grid(True)  # Optional: Add grid for consistency
+        plt.tight_layout()  # Ensure proper layout
         plt.savefig('sac_v2.png')
         plt.show()
-    
+
     def train(self, max_episodes = MAX_EPISODES,max_steps = MAX_STEPS,batch_size = BATCH_SIZE):
         env = MicrogridEnv(w1=W1, w2=W2)
         rewards = []
@@ -236,20 +247,22 @@ class TCSAC():
                 
                 state = next_state
                 episode_reward += reward
-                transitions[time] = [torch.tensor(state), torch.tensor(action), torch.tensor(next_state), torch.tensor(reward)]
+                transitions[time] = [torch.tensor(state), torch.tensor(action), torch.tensor(next_state), torch.tensor(reward),torch.tensor(done)]
                 self.counter += 1
                 if done:
                     self.buffer.add_episodes(transitions,eps) 
                     break
-                
-            if eps % 20 == 0 and eps>0: # plot and model saving interval
+
+
+            if eps % 20 == 0 and eps > BATCH_SIZE: # plot and model saving interval
                 self.plot(rewards)
                 np.save('rewards', rewards)
-                TCSAC.save_model(model_path)
+                model_path = 'model'
+                self.save_models(model_path)
             print('Episode: ', eps, '| Episode Reward: ', episode_reward)
             rewards.append(episode_reward)
-        self.save_model(model_path)
+        #self.save_models(model_path)
 
 if __name__ == '__main__':
     tscac = TCSAC()
-    tscac.train()
+    tscac.train()   

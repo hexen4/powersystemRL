@@ -46,8 +46,8 @@ import numpy as np
 from typing import Dict
 import matplotlib.pyplot as plt
 import pandas as pd
-import tensorflow as tf
-from scipy.special import gamma
+#import tensorflow as tf
+#from scipy.special import gamma
 from setting import *
 # Configure logging to write to a file
 logging.basicConfig(

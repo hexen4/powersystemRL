@@ -24,16 +24,16 @@ def create_unit_profile(csv_all):
     price_df = csv_all[['price($/MWh)']]
 
     # calculating wind parameters
-    wt_df['k_h_w'], wt_df['c_h_w'] = zip(*wt_df.apply(lambda row: calculate_shape_parameters(row['mu_wind(m/s)'], row['sigma_wind(m/s)']), axis=1))
-    wt_df['f_wind_h'] = wt_df.apply(lambda row: calculate_f_wind(row['v_h'], row['k_h_w'], row['c_h_w']), axis=1)
+    #wt_df['k_h_w'], wt_df['c_h_w'] = zip(*wt_df.apply(lambda row: calculate_shape_parameters(row['mu_wind(m/s)'], row['sigma_wind(m/s)']), axis=1))
+    #wt_df['f_wind_h'] = wt_df.apply(lambda row: calculate_f_wind(row['v_h'], row['k_h_w'], row['c_h_w']), axis=1)
     wt_df['P_wind'] = wt_df['v_h'].apply(calculate_wind_power)
 
     # calculating solar parameters
 
-    pv_df['c_h_s'] = pv_df.apply(lambda row: calculate_chs(row['mu_solar(kW/m^2)'], row['sigma_solar(kW/m^2)']), axis=1)
-    pv_df['k_h_s'] = pv_df.apply(lambda row: calculate_khs(row['mu_solar(kW/m^2)'], row['c_h_s']), axis=1)
-    pv_df['f_h_s'] = pv_df.apply(lambda row: calculate_f_solar(row['s_h'],  row['k_h_s'], row['c_h_s']), axis=1)
-    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power) / (10**6)
+    #pv_df['c_h_s'] = pv_df.apply(lambda row: calculate_chs(row['mu_solar(kW/m^2)'], row['sigma_solar(kW/m^2)']), axis=1)
+    #pv_df['k_h_s'] = pv_df.apply(lambda row: calculate_khs(row['mu_solar(kW/m^2)'], row['c_h_s']), axis=1)
+    #pv_df['f_h_s'] = pv_df.apply(lambda row: calculate_f_solar(row['s_h'],  row['k_h_s'], row['c_h_s']), axis=1)
+    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power) / (10**6) #TODO think this 10**3
 
     # NORMALIZE DATA
     pv_df_scaled = normalize_df_column(pv_df, 'P_solar')
