@@ -31,16 +31,15 @@ class MicrogridEnv():
         self.state = spaces.Box(low=-np.inf, high=np.inf, shape=STATE_SHAPE, dtype=np.float32)  #shape of state
         self.market_prices = price_profile_df.to_numpy()[:,1]
         self.original_datasource_consumers = load_profile_df
-        self.datasource_consumers = self.original_datasource_consumers.copy()
-        self.DfData_consumers = DFData(self.datasource_consumers)   
-
     def step(self, action,time):
         #action [(power_curtailed)x5, incentive rate]
         """
         Apply an action, update the environment state, and calculate rewards and penalties.
         """
         # Update state based on the action taken
-        scaled_action = scale_action(np.array(action)) #s_t, a_t, logging s_t, a_t, r_t
+        load_before_curtail = self.original_datasource_consumers.iloc[time]
+        max_action = load_before_curtail.loc[self.curtailment_indices].tolist() + [100]
+        scaled_action = scale_action(np.array(action),max_action) #s_t, a_t, logging s_t, a_t, r_t
         self.state,reward = self.update_state(self.state, scaled_action,time)  #s_t+1, r_t
 
         done = time >= self.H
@@ -90,19 +89,16 @@ class MicrogridEnv():
     def update_state(self, state, action,time): 
         reward, generation_cost,power_transfer_cost,mgo_profit,consumer_incentives_penalty,budget_limit_penalty,prev_benefit,prev_budget= self._calculate_reward(action, state,time)
         next_state = state.astype(np.float32)
-
         # Fetch network response values based on the action
         line_losses, net = network_comp(TIMESTEPS = (time,time),scaled_action = action,prev_line_losses = state[IDX_LINE_LOSSES])
-
         curtailed = [action[:-1]]
-        P_demand = net.load.loc[self.customer_ids, 'p_mw'].to_numpy() # TODO curtailed needs to be clipped, invalid actions
-        P_demand_active = net.load.loc[self.curtailment_indices, 'p_mw']
+        load_before_curtail = self.original_datasource_consumers.iloc[time]
+        P_demand_active = load_before_curtail.loc[self.curtailment_indices]
         pv_pw = net.sgen.at[ids.get('pv'), 'p_mw']
         wt_pw = net.gen.at[ids.get('wt'), 'p_mw']
         cdg_pw = net.gen.at[ids.get('dg'), 'p_mw']
         discomforts = calculate_discomfort(curtailed, P_demand_active) #only 5 customers!
-        discomforts = np.clip(discomforts,-100,100)
-        total_load = np.sum(P_demand)
+        total_load = np.sum(load_before_curtail)
         Pgrid = total_load - pv_pw - wt_pw - cdg_pw - np.sum(curtailed)
         market_price = self.market_prices[time]
 

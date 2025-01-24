@@ -131,7 +131,7 @@ class TCSAC():
 
     def update(self, batch_size, reward_scale=1., auto_entropy=False, target_entropy=-2, gamma = DISCOUNT_FACTOR,_lambda=WEIGHT_CRITIC,soft_tau=TARGET_NETWORK_UPDATE):
         # sample
-        state, action,next_state,reward,done,_= self.buffer.sample(batch_size) #need to add weights. what size does tis returtn? think! need to do this in batches
+        state, action,next_state,reward,done,_= self.buffer.sample_new(batch_size) #need to add weights. what size does tis returtn? think! need to do this in batches
         state      = torch.FloatTensor(state).to(self.device) # [batch_size, state_dim]
         next_state = torch.FloatTensor(next_state).to(self.device) # [batch_size, state_dim]
         action     = torch.FloatTensor(action).to(self.device) # [batch_size, action_dim]
@@ -157,7 +157,7 @@ class TCSAC():
             alpha_loss = 0
     # Compute target Q-values
         target_q1 = self.target_critic1(next_state, new_next_action)
-        target_q23_min = torch.min(
+        target_q23_min = torch.min( 
             self.target_critic2(next_state, new_next_action),
             self.target_critic3(next_state, new_next_action)
         )
@@ -214,7 +214,7 @@ class TCSAC():
         
         # Set font sizes to match the first plot
         plt.title("Reward vs Timestep", fontsize=30)
-        plt.xlabel('Timestep', fontsize=24)
+        plt.xlabel('Experiences in Buffer', fontsize=24)
         plt.ylabel('Reward', fontsize=24)
         plt.xticks(fontsize=24)
         plt.yticks(fontsize=24)
@@ -222,7 +222,7 @@ class TCSAC():
         plt.grid(True)  # Optional: Add grid for consistency
         plt.tight_layout()  # Ensure proper layout
         plt.savefig('sac_v2.png')
-        plt.show()
+        #plt.show()
 
     def train(self, max_episodes = MAX_EPISODES,max_steps = MAX_STEPS,batch_size = BATCH_SIZE):
         env = MicrogridEnv(w1=W1, w2=W2)
@@ -254,7 +254,7 @@ class TCSAC():
                     break
 
 
-            if eps % 20 == 0 and eps > BATCH_SIZE: # plot and model saving interval
+            if eps % 20 == 0 and eps > WARMUP: # plot and model saving interval
                 self.plot(rewards)
                 np.save('rewards', rewards)
                 model_path = 'model'

@@ -43,7 +43,7 @@ class ActorPiModel(nn.Module):
         
         normal = Normal(0, 1)
         z      = normal.sample(mean.shape) 
-        action_0 = torch.sigmoid(mean + std*z.to(device)) # TanhNormal distribution as actions; reparameterization trick, using sigmoid now
+        action_0 = torch.tanh(mean + std*z.to(device)) # TanhNormal distribution as actions; reparameterization trick, u
         action = (action_0 + 1) * 0.5
         # The log-likelihood here is for the TanhNorm distribution instead of only Gaussian distribution. \
         # The TanhNorm forces the Gaussian with infinite action range to be finite. \
@@ -55,8 +55,7 @@ class ActorPiModel(nn.Module):
         # the epsilon is for preventing the negative cases in log; \
         # (3). the third term is caused by the action range I used in this code is not (-1, 1) but with \
         # an arbitrary action range, which is slightly different from original paper -> deleted
-        log_prob = Normal(mean, std).log_prob(mean+ std*z.to(device)) 
-        #- torch.log(1. - action_0.pow(2) + epsilon) -  np.log(self.action_range)
+        log_prob = Normal(mean, std).log_prob(mean+ std*z.to(device)) - torch.log(1. - action_0.pow(2) + epsilon) -  np.log(self.action_range)
         # both dims of normal.log_prob and -log(1-a**2) are (N,dim_of_action); 
         # the Normal.log_prob outputs the same dim of input features instead of 1 dim probability, 
         # needs sum up across the features dim to get 1 dim prob; or else use Multivariate Normal.
@@ -70,9 +69,9 @@ class ActorPiModel(nn.Module):
         
         normal = Normal(0, 1)
         z      = normal.sample(mean.shape).to(device)
-        action = self.action_range* torch.sigmoid(mean + std*z)
+        action = self.action_range* torch.tanh(mean + std*z)
         #action = (action + 1) * 0.5 
-        action = self.action_range* torch.sigmoid(mean).detach().cpu().numpy()[0] if deterministic else action.detach().cpu().numpy()[0]
+        action = self.action_range* torch.tanh(mean).detach().cpu().numpy()[0] if deterministic else action.detach().cpu().numpy()[0]
         return action
 
     def sample_action(self,):

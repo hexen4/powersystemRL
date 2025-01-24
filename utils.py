@@ -65,10 +65,11 @@ def normalize_df_column(df, column_name):
     return (df[column_name] - col_min) / (col_max - col_min)
 
 
-# --- Action Scaling --- [-1,1] -> [min, max]
-def scale_action(nn_action, min_action=MIN_ACTION, max_action=MAX_ACTION):
-
-    return min_action + (nn_action) * (max_action - min_action)
+# --- Action Scaling --- [0,1] -> [min, max]
+def scale_action(nn_action, max_action, min_action=MIN_ACTION):
+    action = min_action + (nn_action + 1.0) * 0.5 * (max_action - min_action)
+    action = np.clip(action, min_action, max_action)
+    return action
 # --- Normalization ---
 def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, batch_count):
     delta = batch_mean - mean
@@ -265,6 +266,31 @@ def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_a
     """
     Logs penalties, profit, and reward information at specified time intervals.
     """
+    # Define the mapping for state indices
+    state_names = {
+        0: "POWER_GEN",
+        1: "PREV_GEN_COST",
+        2: "MARKET_PRICE",
+        3: "PGRID",
+        4: "PREV_POWER_TRANSFER_COST",
+        5: "PREV_MGO_PROFIT",
+        6: "SOLAR",
+        7: "WIND",
+        8: "TOTAL_LOAD",
+        9: "LINE_LOSSES",
+        10: "PREV_GENPOWER",
+    }
+
+    # Add ranges for indexed consumers (5 consumers in this case)
+    state_names.update({i: f"ACTIVE_PMW_CONSUMER_{i-11}" for i in range(11, 16)})
+    state_names.update({i: f"PREV_CURTAILED_CONSUMER_{i-16}" for i in range(16, 21)})
+    state_names.update({i: f"PREV_ACTIVE_PMW_CONSUMER_{i-21}" for i in range(21, 26)})
+    state_names.update({i: f"DISCOMFORT_CONSUMER_{i-26}" for i in range(26, 31)})
+    state_names.update({i: f"PREV_ACTIVE_BENEFIT_CONSUMER_{i-31}" for i in range(31, 36)})
+
+    # Add remaining state indices
+    state_names[36] = "MINMARKET_PRICE"
+    state_names[37] = "PREV_BUDGET"
     if t % freq == 0:
 
 
@@ -283,7 +309,8 @@ def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_a
         if state is not None:
             logging.info("State:")
             for idx, value in enumerate(state):
-                logging.info(f"  IDX_{idx}: {value}")
+                state_name = state_names.get(idx, f"IDX_{idx}") 
+                logging.info(f"  {state_name}: {value}")
 def log_trans_info(s, a, t, freq=100, **kwargs):
     if t % freq == 0:
         s_seq = s[0]    

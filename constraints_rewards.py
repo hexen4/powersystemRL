@@ -40,7 +40,7 @@ def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, total_load, curtail
     total_supply = P_grid + P_gen + P_solar + P_wind
     total_demand = total_load - sum(curtailed) + P_loss 
     if not np.isclose(total_supply, total_demand, atol=1e-5): # TODO check atol
-        penalty = abs(total_supply - total_demand) ** 2 # TODO check penalty term
+        penalty = abs(total_supply - total_demand) 
         return PENALTY_FACTOR * penalty
     return 0 
 
@@ -49,9 +49,9 @@ def generation_limit_constraint(P_gen):
     Ensure the generation stays within its defined limits.
     """
     if P_gen < PGEN_MIN:
-        return PENALTY_FACTOR * (PGEN_MIN - P_gen) ** 2
+        return PENALTY_FACTOR * (PGEN_MIN - P_gen) 
     elif P_gen > PGEN_MAX:
-        return PENALTY_FACTOR * (P_gen - PGEN_MAX) ** 2
+        return PENALTY_FACTOR * (P_gen - PGEN_MAX) 
     return 0
 
 def ramp_rate_constraint(P_gen, P_gen_prev):
@@ -60,9 +60,9 @@ def ramp_rate_constraint(P_gen, P_gen_prev):
     """
     delta = P_gen - P_gen_prev
     if delta > PRAMPUP:
-        return PENALTY_FACTOR * (delta - PRAMPUP) ** 2
+        return abs(PENALTY_FACTOR * (delta - PRAMPUP)) 
     elif delta < PRAMPDOWN:
-        return PENALTY_FACTOR * (delta - PRAMPDOWN) ** 2
+        return abs(PENALTY_FACTOR * (delta - PRAMPDOWN)) 
     return 0
 
 def curtailment_limit_constraint(curtailed, P_active_demand, mu1=0, mu2=0.6): 
@@ -74,12 +74,12 @@ def curtailment_limit_constraint(curtailed, P_active_demand, mu1=0, mu2=0.6):
     min_curtailment = mu1 * P_active_demand
     max_curtailment = mu2 * P_active_demand
 
-    below_min_penalty = np.sum((min_curtailment - curtailed)[curtailed < min_curtailment] ** 2)
-    above_max_penalty = np.sum((curtailed - max_curtailment)[curtailed > max_curtailment] ** 2)
+    below_min_penalty = np.sum((min_curtailment - curtailed)[curtailed < min_curtailment])
+    above_max_penalty = np.sum((curtailed - max_curtailment)[curtailed > max_curtailment])
 
     # Total penalty
     penalty = below_min_penalty + above_max_penalty
-    return penalty * PENALTY_FACTOR
+    return abs(penalty * PENALTY_FACTOR)
 
 def daily_curtailment_limit(curtailed, P_active_demand, prev_curtailed, prev_P_active_demand, lambda_=lambda_):
     """
@@ -93,8 +93,8 @@ def daily_curtailment_limit(curtailed, P_active_demand, prev_curtailed, prev_P_a
     violations = total_curtailment > max_curtailment
 
     # Calculate penalty for violations
-    penalty = np.sum((total_curtailment[violations] - max_curtailment[violations]) ** 2)
-    return PENALTY_FACTOR * penalty
+    penalty = np.sum((total_curtailment[violations] - max_curtailment[violations]))
+    return abs(PENALTY_FACTOR * penalty)
 
 def indivdiual_consumer_benefit(incentive, curtailed, discomforts, prev_benefit, epsilon= EPSILON):
     """
@@ -111,9 +111,9 @@ def indivdiual_consumer_benefit(incentive, curtailed, discomforts, prev_benefit,
     violations = benefit_diff + prev_benefit < 0
 
     # Calculate the penalty for violations
-    penalty = np.sum((benefit_diff[violations]) ** 2)
+    penalty = np.sum((benefit_diff[violations]))
 
-    return PENALTY_FACTOR * penalty,benefit_diff
+    return abs(PENALTY_FACTOR * penalty),benefit_diff
 
 def benefit_limit_constraint(incentive, curtailed, discomforts, prev_benefit,epsilon= EPSILON):
     """
@@ -134,9 +134,9 @@ def benefit_limit_constraint(incentive, curtailed, discomforts, prev_benefit,eps
     violations = current_benefit < prev_benefit
 
     # Calculate the penalty for violations
-    penalty = np.sum((current_benefit[violations] - prev_benefit[violations]) ** 2)
+    penalty = np.sum((current_benefit[violations] - prev_benefit[violations]))
 
-    return penalty * PENALTY_FACTOR
+    return abs(penalty * PENALTY_FACTOR)
 
 def incentive_rate_constraint(incentive, market_price, min_market_price,eta=0.4):
     """
@@ -145,9 +145,9 @@ def incentive_rate_constraint(incentive, market_price, min_market_price,eta=0.4)
     """
     min_market_price = min(market_price,min_market_price)
     if incentive > min_market_price:
-        return PENALTY_FACTOR * (min_market_price - incentive) ** 2
+        return abs(PENALTY_FACTOR * (min_market_price - incentive)) 
     elif incentive < min_market_price * eta:
-        return PENALTY_FACTOR * (incentive - eta * min_market_price) ** 2
+        return abs(PENALTY_FACTOR * (incentive - eta * min_market_price))
     return 0
 
 def budget_limit_constraint(incentives, curtailed, prev_budget, budget = MB): # TODO set this
@@ -159,5 +159,5 @@ def budget_limit_constraint(incentives, curtailed, prev_budget, budget = MB): # 
     """
     total_cost = sum(incentives * curtailed) + prev_budget
     if total_cost > budget:
-        return (PENALTY_FACTOR * (total_cost - budget) ** 2), total_cost
+        return abs((PENALTY_FACTOR * (total_cost - budget))), total_cost
     return 0, total_cost

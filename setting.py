@@ -15,14 +15,14 @@ lambda_ = 0.4 #daily curtailment limit
 W1 = 0.5
 W2 = 0.5
 EPSILON = 0.5 #incentive per unit curtailed
-PENALTY_FACTOR = 3
+PENALTY_FACTOR = 1e6
 
 #comprehensivereplaybuffer
 RHO_MIN = 10 # TODO observe and change
 ETA = 0.5  
-REPLAY_BUFER_SIZE = 1e6
+REPLAY_BUFER_SIZE = 2e5
 BATCH_SIZE = 128 #128
-ALPHA = 0.6 #exponent α determines how much prioritization is used, with α = 0 corresponding to the uniform case.
+ALPHA = 1 #exponent α determines how much prioritization is used, with α = 0 corresponding to the uniform case.
 BETA = 0 # importance sampling negative exponent.
 
 #SAC only
@@ -38,7 +38,7 @@ TEMP = 0.1
 MAX_EPISODES = 8000
 HOUR_PER_TIME_STEP = 1
 MAX_STEPS = 24 / HOUR_PER_TIME_STEP
-WARMUP = 5 * BATCH_SIZE #20
+WARMUP = 10 * BATCH_SIZE 
 UPDATE_FREQ = 5
 
 # NN Hyperparameters
@@ -69,7 +69,7 @@ IDX_PREV_BUDGET = 37
 
 # Action
 #MAX_ACTION = np.array([0.42] * 5 + [100]) #do i need to dynamically update?
-MAX_ACTION = np.array([0.06,0.06,0.09,0.09,0.15] + [100]) #do i need to dynamically update?
+MAX_ACTION = np.array([0.06,0.09,0.06,0.15,0.06] + [100]) #do i need to dynamically update?
 MIN_ACTION = np.array([0] * 5 + [0])      # [curtail_c1_min, ..., curtail_c5_min,incentive_rate_min]
 ACTION_IDX = {
     'curtail_C8': 0,               
@@ -101,7 +101,7 @@ PGEN_MIN = 35 / 1000 #MW
 PGEN_MAX = 300 / 1000
 PRAMPUP = 70 / 1000
 PRAMPDOWN = 50 / 1000
-MB = 2000 #daily budget of MGO
+MB = 500 #daily budget of MGO
 
 NSOLAR = 4231
 Ki = 0.00545
@@ -202,7 +202,7 @@ filepath_results = r"C:\Users\rando\Desktop\uni y4\powersystemRL\data\derived"
 
 pv_profile_df = pd.read_csv(filepath_results + '/pv_profile.csv')   
 wt_profile_df = pd.read_csv(filepath_results + '/wt_profile.csv')
-load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv', index_col=0) / 1000 
+load_profile_df = pd.read_csv(filepath_results + '/load_profile.csv', index_col=0) 
 price_profile_df = pd.read_csv(filepath_results + '/price_profile.csv')
 
 data_source_wind = DFData(wt_profile_df)
