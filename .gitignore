@@ -9,3 +9,5 @@ modeL_target_critic2_weights
 modeL_target_critic3_weights
 modeL_critic3_weights
 rewards.npy
+rewards_log.txt
+env

@@ -118,4 +118,4 @@ class CriticQModel(nn.Module):
         x = self.fc(state_action)
         q_value = self.q(x)
         return q_value
-        
+    

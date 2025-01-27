@@ -36,8 +36,9 @@ from setting import *
 import utils
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
+from memory_profiler import profile, memory_usage
 
-class TCSAC():
+class TCSAC():    
     def __init__(self, epsilon_p=0.001, **kwargs):
         
         self.counter = 0
@@ -45,12 +46,12 @@ class TCSAC():
         self.batch_size = BATCH_SIZE
         self.alpha = TEMP
         self.epsilon_p = epsilon_p
-
         # normalization
         self.obs_norm = utils.NormalizeObservation(STATE_SHAPE)
 
         # action bounds
-        self.max_action = MAX_ACTION
+        
+        #self.max_action = MAX_ACTION
         self.min_action = MIN_ACTION   
         self.action = None 
 
@@ -223,35 +224,36 @@ class TCSAC():
         plt.tight_layout()  # Ensure proper layout
         plt.savefig('sac_v2.png')
         #plt.show()
-
+    #@profile
     def train(self, max_episodes = MAX_EPISODES,max_steps = MAX_STEPS,batch_size = BATCH_SIZE):
         env = MicrogridEnv(w1=W1, w2=W2)
         rewards = []
         for eps in range(max_episodes):
-            state = env.reset() 
-            episode_reward = 0
+            state = env.reset() # t= 0 
+            episode_reward = 0 
             transitions = [None] * int(max_steps)
-            for time in range(int(max_steps)):
+            for time in range(int(max_steps)): 
                 # Sample action from policy
-                if self.counter > 0:
-                    action = self.policy_net.get_action(state, deterministic=False)
+                if self.counter > WARMUP:
+                    action = self.policy_net.get_action(state, deterministic=False) 
                 else:
-                    action = self.policy_net.sample_action()
-                # Step environment
-                next_state, reward, done, _ = env.step(action,time)
+                    action = self.policy_net.sample_action() # random action for diverse training
+                # Step environment 
+                next_state, reward, done, _ = env.step(state,action,time)
                 #next_state = self.obs_norm.normalize(state, update=False) # TODO do i need to normalise state?
                 
                 # Update networks if enough data is collected
                 if self.buffer.__len__() > batch_size and self.counter > WARMUP and self.counter % UPDATE_FREQ == 0: 
                     self.update(batch_size)
+                transitions[time] = [torch.tensor(state), torch.tensor(action), torch.tensor(next_state), torch.tensor(reward),torch.tensor(done)]
                 
                 state = next_state
                 episode_reward += reward
-                transitions[time] = [torch.tensor(state), torch.tensor(action), torch.tensor(next_state), torch.tensor(reward),torch.tensor(done)]
+                
                 self.counter += 1
                 if done:
                     self.buffer.add_episodes(transitions,eps) 
-                    break
+                    break   
 
 
             if eps % 20 == 0 and eps > WARMUP: # plot and model saving interval
@@ -261,7 +263,6 @@ class TCSAC():
                 self.save_models(model_path)
             print('Episode: ', eps, '| Episode Reward: ', episode_reward)
             rewards.append(episode_reward)
-        #self.save_models(model_path)
 
 if __name__ == '__main__':
     tscac = TCSAC()

@@ -266,32 +266,29 @@ def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_a
     """
     Logs penalties, profit, and reward information at specified time intervals.
     """
+
     # Define the mapping for state indices
     state_names = {
         0: "POWER_GEN",
         1: "PREV_GEN_COST",
         2: "MARKET_PRICE",
-        3: "PGRID",
-        4: "PREV_POWER_TRANSFER_COST",
-        5: "PREV_MGO_PROFIT",
-        6: "SOLAR",
-        7: "WIND",
-        8: "TOTAL_LOAD",
-        9: "LINE_LOSSES",
-        10: "PREV_GENPOWER",
+        3: "PREV_POWER_TRANSFER_COST",
+        4: "PREV_MGO_PROFIT",
+        5: "SOLAR",
+        6: "WIND",
+        7: "TOTAL_LOAD",
+        8: "LINE_LOSSES",
+        9: "PREV_GENPOWER",
     }
 
-    # Add ranges for indexed consumers (5 consumers in this case)
-    state_names.update({i: f"ACTIVE_PMW_CONSUMER_{i-11}" for i in range(11, 16)})
-    state_names.update({i: f"PREV_CURTAILED_CONSUMER_{i-16}" for i in range(16, 21)})
-    state_names.update({i: f"PREV_ACTIVE_PMW_CONSUMER_{i-21}" for i in range(21, 26)})
-    state_names.update({i: f"DISCOMFORT_CONSUMER_{i-26}" for i in range(26, 31)})
-    state_names.update({i: f"PREV_ACTIVE_BENEFIT_CONSUMER_{i-31}" for i in range(31, 36)})
+    state_names.update({i: f"ACTIVE_PMW_CONSUMER_{i-10}" for i in range(10, 15)})
+    state_names.update({i: f"PREV_CURTAILED_CONSUMER_{i-15}" for i in range(15, 20)})
+    state_names.update({i: f"PREV_ACTIVE_PMW_CONSUMER_{i-20}" for i in range(20, 25)})
+    state_names.update({i: f"PREV_ACTIVE_BENEFIT_CONSUMER_{i-25}" for i in range(25, 30)})
 
-    # Add remaining state indices
-    state_names[36] = "MINMARKET_PRICE"
-    state_names[37] = "PREV_BUDGET"
-    if t % freq == 0:
+    state_names[30] = "MINMARKET_PRICE"
+    state_names[31] = "PREV_BUDGET"
+    if t % 22 == 0:
 
 
         # Log reward, profit, and penalties
@@ -414,6 +411,7 @@ def calculate_wind_power(v_h):
         return 0
     
 def calculate_solar_power(s_h):
+    s_h /= 1000
     Tc = Ta + s_h*((Tot-20)/0.8)
     Is = s_h*(Isc + Ki*(Tc-25))
     Vs = Voc - Kv*Tc

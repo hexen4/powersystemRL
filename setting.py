@@ -19,9 +19,9 @@ PENALTY_FACTOR = 1e6
 
 #comprehensivereplaybuffer
 RHO_MIN = 10 # TODO observe and change
-ETA = 0.5  
+ETA = 0.2
 REPLAY_BUFER_SIZE = 2e5
-BATCH_SIZE = 128 #128
+BATCH_SIZE = 128 
 ALPHA = 1 #exponent α determines how much prioritization is used, with α = 0 corresponding to the uniform case.
 BETA = 0 # importance sampling negative exponent.
 
@@ -37,39 +37,39 @@ TEMP = 0.1
 #ENVIRONMENT
 MAX_EPISODES = 8000
 HOUR_PER_TIME_STEP = 1
-MAX_STEPS = 24 / HOUR_PER_TIME_STEP
-WARMUP = 10 * BATCH_SIZE 
+MAX_STEPS = (24 / HOUR_PER_TIME_STEP) - 1
+WARMUP = 8 * BATCH_SIZE 
 UPDATE_FREQ = 5
 
 # NN Hyperparameters
-LR_ACTOR = 0.001
-LR_CRITIC = 0.001
-TARGET_NETWORK_UPDATE = 0.001
+LR_ACTOR = 0.0005
+LR_CRITIC = 0.0005
+TARGET_NETWORK_UPDATE = 0.0005
 NN_BOUND = 1
 
 # State
 IDX_POWER_GEN = 0
 IDX_PREV_GEN_COST = 1
 IDX_MARKET_PRICE = 2
-IDX_PGRID = 3
-IDX_PREV_POWER_TRANSFER_COST = 4
-PREV_MGO_PROFIT = 5
-IDX_SOLAR = 6
-IDX_WIND = 7
-IDX_TOTAL_LOAD = 8
-IDX_LINE_LOSSES = 9
-IDX_PREV_GENPOWER = 10
-IDX_ACTIVE_PMW = np.arange(11, 16) # 5 consumers
-IDX_PREV_CURTAILED = np.arange(16, 21) # 5 consumers
-IDX_PREV_ACTIVE_PMW = np.arange(21, 26) # 5 consumers
-IDX_DISCOMFORT = np.arange(26, 31) # 5 consumers    
-IDX_PREV_ACTIVE_BENEFIT = np.arange(31, 36) # 5 consumers
-IDX_MINMARKET_PRICE = 36
-IDX_PREV_BUDGET = 37
+IDX_PREV_POWER_TRANSFER_COST = 3
+PREV_MGO_PROFIT = 4
+IDX_SOLAR = 5
+IDX_WIND = 6
+IDX_TOTAL_LOAD = 7
+IDX_LINE_LOSSES = 8
+IDX_PREV_GENPOWER = 9
+IDX_ACTIVE_PMW = np.arange(10, 15) # 5 consumers
+IDX_PREV_CURTAILED = np.arange(15, 20) # 5 consumers
+IDX_PREV_ACTIVE_PMW = np.arange(20, 25) # 5 consumers
+IDX_PREV_ACTIVE_BENEFIT = np.arange(25, 30) # 5 consumers
+IDX_MINMARKET_PRICE = 30
+IDX_PREV_BUDGET = 31
+#IDX_DISCOMFORT = np.arange(26, 31) # derived
+#IDX_PGRID = 3 #derived 
+
 
 # Action
-#MAX_ACTION = np.array([0.42] * 5 + [100]) #do i need to dynamically update?
-MAX_ACTION = np.array([0.06,0.09,0.06,0.15,0.06] + [100]) #do i need to dynamically update?
+#MAX_ACTION = np.array([0.42] * 5 + [100]) 
 MIN_ACTION = np.array([0] * 5 + [0])      # [curtail_c1_min, ..., curtail_c5_min,incentive_rate_min]
 ACTION_IDX = {
     'curtail_C8': 0,               
@@ -80,7 +80,7 @@ ACTION_IDX = {
     'incentive_rate': 5            
 }
 
-N_ACTION = len(MAX_ACTION) 
+N_ACTION = len(MIN_ACTION) 
 N_OBS = IDX_PREV_BUDGET + 1
 ACTION_SHAPE = (N_ACTION,)
 STATE_SHAPE = (N_OBS,)
@@ -94,7 +94,7 @@ WIND_A = WTRATED / (v_opt**3 - v_in**3)
 WIND_B = v_in**3 / (v_opt**3 - v_in**3)
 
 
-A1 = 0.0001 * 1000 #converted from $/kWh to $/MWh
+A1 = 0.0001 * 1000 * 1000 #converted from $/kWh to $/MWh
 A2 = 0.1032 * 1000 
 A3 = 14.5216
 PGEN_MIN = 35 / 1000 #MW

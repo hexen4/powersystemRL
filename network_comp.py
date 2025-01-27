@@ -16,18 +16,17 @@ from pandapower.plotting.plotly import pf_res_plotly
 from pandapower.control.basic_controller import Controller
 
 class DG_controller(Controller):
+    #TODO only updating customer curtailment for power flow. is it ok if curtailment does not reflect in next state? 
     """
     Custom DG Controller for managing distributed generation with curtailment and line loss control.
     """
-    def __init__(self, net, element_index, scaled_action, prev_line_losses, 
-                 data_source=None, order=0, level=0, **kwargs):
+    def __init__(self, net, element_index, scaled_action, data_source=None, order=0, level=0, **kwargs):
         super().__init__(net, in_service=True, recycle=False, order=order, level=level, **kwargs)
 
         # Attributes for distributed generation
         self.element_index = element_index  # Index of the DG in the network
         self.curtailment_indices = ["C8", "C21", "C13", "C29", "C24"]
         self.scaled_action = scaled_action
-        self.prev_line_losses = prev_line_losses
         self.applied = False
 
         # Profile-related attributes
@@ -49,9 +48,9 @@ class DG_controller(Controller):
         updated_load_values = np.maximum(load_values - self.scaled_action[:-1], 0)
         net.load.loc[self.curtailment_indices, "p_mw"] = updated_load_values
 
-        # Update DG power based on previous line losses
-        net.gen.loc[self.element_index, "p_mw"] = self.prev_line_losses
 
+        current_line_losses = net.res_line['pl_mw'].sum()
+        net.gen.loc[self.element_index, "p_mw"] = current_line_losses  #TODO need MNR to calculate this
     def control_step(self, net):
         """
         Execute the control logic to adjust loads and generation based on action and state.
@@ -69,7 +68,7 @@ class DG_controller(Controller):
         self.last_time_step = time
         self.applied = False  # Reset for next control step
 
-def network_comp(TIMESTEPS,scaled_action,prev_line_losses):
+def network_comp(TIMESTEPS,scaled_action):
     net = pp.create_empty_network()
     for i in range(N_BUS): #zero-indexed  
         pp.create_bus(net, vn_kv=12.66, name=f"Bus {i}")  
@@ -77,15 +76,14 @@ def network_comp(TIMESTEPS,scaled_action,prev_line_losses):
 
     # TODO c_nf_per_km, max_i_ka ?
     for to_bus, from_bus, r_ohm, x_ohm in line_data:
-        pp.create_line_from_parameters(net, c_nf_per_km = 10, max_i_ka = 0.4, 
+        pp.create_line_from_parameters(net, c_nf_per_km = 15, max_i_ka = 0.4, 
                                        from_bus = from_bus, to_bus = to_bus, length_km = 1, r_ohm_per_km=r_ohm, x_ohm_per_km=x_ohm) 
 
     #  gen -> voltage controlled PV nodes. sgen -> no voltage control
     pv1 = pp.create_sgen(net, bus=13, p_mw=0, q_mvar=0, name="PV1", index = 0)
     wt1 = pp.create_gen(net, bus=4, p_mw=0.5, min_p_mw = 0, max_p_mw = WTRATED, vm_pu=1.0, name="WT1", index = 1)
     cdg1 = pp.create_gen(net, bus=11, p_mw=0, min_p_mw=PGEN_MIN, max_p_mw=PGEN_MAX, vm_pu=1.0, name="CDG1", index = 2)
-    dg_controller = DG_controller(net=net,element_index=2, scaled_action=scaled_action,prev_line_losses=prev_line_losses,order=1)
-    single_step = False
+    dg_controller = DG_controller(net=net,element_index=2, scaled_action=scaled_action,order=1)
     for i, bus in enumerate(range(32)):
         pp.create_load(
             net, 
@@ -104,35 +102,36 @@ def network_comp(TIMESTEPS,scaled_action,prev_line_losses):
     ConstControl(net, element='sgen', variable='p_mw', element_index=pv1, 
                  profile_name="P_solar", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_sun)
     # Run power flow analysis
+    timeseries.run_timeseries(net, time_steps = TIMESTEPS, verbose =0, numba = True)
+    line_losses = net.res_line['pl_mw'].sum()
     
-    if not single_step: 
-        #ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results)  
-        
-        #print(pp.diagnostic(net))
-        timeseries.run_timeseries(net, time_steps = TIMESTEPS, numba = False)
-        #print("Time series simulation completed.")
-        line_losses = net.res_line['pl_mw'].sum()
-    else:
-        #print("Starting simulation with control loop...")
-        
-        pp.control.run_control(
-            net,
-            ctrl_variables=None,  
-            max_iter=30,          
-            continue_on_lf_divergence=False  
-        )
-        #print("Control loop simulation completed.")
-
-        # Calculate line losses
-        line_losses = net.res_line['pl_mw'].sum()
+    #Debugging
+    #ow = create_output_writer(net, TIMESTEPS, output_dir=filepath_results) #writes to excel
+    #print(pp.diagnostic(net))
+    #pv_pw = net.sgen.at[ids.get('pv'), 'p_mw']
+    #wt_pw = net.gen.at[ids.get('wt'), 'p_mw']
+    #cdg_pw = net.gen.at[ids.get('dg'), 'p_mw'] 
+    #total_load = net.load['p_mw'].sum()
+    #P_grid = total_load - pv_pw - wt_pw
 
     return line_losses, net
  
-#if __name__ == "__main__":
-#    line_losses, net = network_comp((0,0),scaled_action=[0.01,0.01,0.01,0.01,0.01,0.1],prev_line_losses=0)
+if __name__ == "__main__":
+    #line_losses, net = network_comp((range(24)),scaled_action=[0.01,0.01,0.01,0.01,0.01,0.1],prev_line_losses=0)
     #pp.plotting.simple_plot(net, respect_switches=False, line_width=1.0, bus_size=1.0, ext_grid_size=1.0, trafo_size=1.0, plot_loads=False, plot_sgens=False, load_size=1.0, sgen_size=1.0, switch_size=2.0, switch_distance=1.0, plot_line_switches=False, scale_size=True, bus_color='b', line_color='grey', trafo_color='k', ext_grid_color='y', switch_color='k', library='igraph', show_plot=True, ax=None)  
-    
-    #
     #pf_res_plotly(net)
-    
-    #plot_results(filepath_results)
+    #(filepath_results)
+    test = []
+    P_grid_list = []
+    line_losses_list =  []
+    for i in range(24):  # Replace `n` with the number of iterations you want
+        line_losses, net = network_comp((i,i), scaled_action=[0,0,0,0,0,0])
+        #test.append(cdg_pw)
+        #P_grid_list.append(P_grid)
+        line_losses_list.append(line_losses)
+        prev_line_losses = line_losses  # Update prev_line_losses for the next iteration    
+    result = [A1 * (x ** 2) + A2 * x + A3 for x in test]
+    print(f"fuel_cost {sum(result)}")
+    print(f"total energy {sum(test)}")
+    print(f"grid_transfer {sum(P_grid_list)}")
+    print(f"delta(line loss - generator) {np.array(line_losses_list)-np.array(test)}")

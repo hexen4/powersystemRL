@@ -38,7 +38,7 @@ class ExtendedPrioritizedReplayBuffer(PrioritizedReplayBuffer):
         #episode_length = len(transitions)
 
         # Calculate ρe for the episode
-        rho_e = max(self.capacity * self.eta **(1000/(episode_counter+1)), self.rho_min) # TODO need counter for current stage    
+        rho_e = max(self.capacity * 1e5* self.eta **(1100/(episode_counter+1)), self.rho_min) # TODO need counter for current stage    
         indices = []
         priorities = []
 
