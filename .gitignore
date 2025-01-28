@@ -11,3 +11,5 @@ modeL_critic3_weights
 rewards.npy
 rewards_log.txt
 env
+*.m
+*.cover

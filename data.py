@@ -33,7 +33,7 @@ def create_unit_profile(csv_all):
     #pv_df['c_h_s'] = pv_df.apply(lambda row: calculate_chs(row['mu_solar(kW/m^2)'], row['sigma_solar(kW/m^2)']), axis=1)
     #pv_df['k_h_s'] = pv_df.apply(lambda row: calculate_khs(row['mu_solar(kW/m^2)'], row['c_h_s']), axis=1)
     #pv_df['f_h_s'] = pv_df.apply(lambda row: calculate_f_solar(row['s_h'],  row['k_h_s'], row['c_h_s']), axis=1)
-    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power) / (10**6) #TODO think this 10**3
+    pv_df['P_solar'] = pv_df['s_h'].apply(calculate_solar_power) / (10**3)
 
     # NORMALIZE DATA
     pv_df_scaled = normalize_df_column(pv_df, 'P_solar')
