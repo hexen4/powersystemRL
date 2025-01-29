@@ -151,7 +151,7 @@ class TCSAC():
             alpha_loss = -(self.log_alpha * (log_prob + target_entropy).detach()).mean()
             # print('alpha loss: ',alpha_loss)
             self.alpha_optimizer.zero_grad()
-            alpha_loss  .backward()
+            alpha_loss.backward()
             self.alpha_optimizer.step()
             self.alpha = self.log_alpha.exp()
         else:

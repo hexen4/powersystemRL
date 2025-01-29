@@ -11,7 +11,6 @@ from gym import spaces
 from network_comp import *
 from collections import deque
 
-
 class MicrogridEnv():
     def __init__(self, w1, w2): 
         
@@ -26,17 +25,42 @@ class MicrogridEnv():
         self.market_prices = price_profile_df.to_numpy()[:,1]
         self.original_datasource_consumers = load_profile_df
 
-         #TODO wrong, need to fix NR to follow papers
-        self.init_line_losses, self.init_net = network_comp((0, 0), scaled_action=[0] * 6)
-        # Initialize variables using self.init_net
-        self.init_P_demand = self.init_net.load.loc[self.customer_ids, 'p_mw'].to_numpy()
-        self.init_P_demand_active = self.init_net.load.loc[self.curtailment_indices, 'p_mw'].to_numpy()
-        self.init_pv_pw = self.init_net.sgen.at[self.ids.get('pv'), 'p_mw']
-        self.init_wt_pw = self.init_net.gen.at[self.ids.get('wt'), 'p_mw']
-        self.init_cdg_pw = self.init_net.gen.at[self.ids.get('dg'), 'p_mw']
+        self.init_line_losses_max, self.init_net_max = network_comp((0, 0), scaled_action=[0] * 6, interval = "max")
+        self.init_pv_pw_max = self.init_net_max.sgen.at[self.ids.get('pv'), 'p_mw']
+        self.init_wt_pw_max = self.init_net_max.gen.at[self.ids.get('wt'), 'p_mw']
+        self.init_cdg_pw_max = self.init_net_max.gen.at[self.ids.get('dg'), 'p_mw']
+
+        self.init_line_losses_min, self.init_net_min = network_comp((0, 0), scaled_action=[0] * 6, interval = "min")
+        self.init_pv_pw_min = self.init_net_min.sgen.at[self.ids.get('pv'), 'p_mw']
+        self.init_wt_pw_min = self.init_net_min.gen.at[self.ids.get('wt'), 'p_mw']
+        self.init_cdg_pw_min = self.init_net_min.gen.at[self.ids.get('dg'), 'p_mw']
+        # Initialize variables using self.init_net, doesnt matter max or min
+        self.init_P_demand = self.init_net_max.load.loc[self.customer_ids, 'p_mw'].to_numpy()
+        self.init_P_demand_active = self.init_net_max.load.loc[self.curtailment_indices, 'p_mw'].to_numpy()
+
         self.init_market_price = self.market_prices[0]
         self.init_total_load = np.sum(self.init_P_demand) 
-
+        self.net = self.init_net_max #reset net
+        self.state_init = np.array([0] * N_OBS).astype(np.float32)
+        
+        # Populate the state array
+        self.state_init[IDX_POWER_GEN_MAX] = np.float32(self.init_cdg_pw_max)
+        self.state_init[IDX_POWER_GEN_MIN] = np.float32(self.init_cdg_pw_min)
+        self.state_init[IDX_MARKET_PRICE] = np.float32(self.init_market_price)
+        self.state_init[IDX_SOLAR_MAX] = np.float32(self.init_pv_pw_max)
+        self.state_init[IDX_WIND_MAX] = np.float32(self.init_wt_pw_max)
+        self.state_init[IDX_SOLAR_MIN] = np.float32(self.init_pv_pw_min)
+        self.state_init[IDX_WIND_MIN] = np.float32(self.init_wt_pw_min)
+        self.state_init[IDX_TOTAL_LOAD] = np.float32(self.init_total_load)
+        self.state_init[IDX_LINE_LOSSES_MAX] = np.float32(self.init_line_losses_max)
+        self.state_init[IDX_LINE_LOSSES_MIN] = np.float32(self.init_line_losses_min)
+        self.state_init[IDX_ACTIVE_PMW] = np.array(self.init_P_demand_active, dtype=np.float32)
+        self.state_init[IDX_MINMARKET_PRICE] = self.init_market_price 
+        self.state_init[IDX_PREV_GEN_COST] = 0  
+        self.state_init[IDX_PREV_POWER_TRANSFER_COST] = 0  
+        self.state_init[IDX_PREV_ACTIVE_BENEFIT] = 0  
+        self.state_init[IDX_PREV_BUDGET] = 0 
+    
     def step(self, state, action,time):
         #action [(power_curtailed)x5, incentive rate]
         """
@@ -62,10 +86,17 @@ class MicrogridEnv():
         #calculate params for st+1
         curtailed = action[:-1]
         time += 1
-        line_losses, self.net = network_comp(TIMESTEPS = (time,time),scaled_action = action)
-        pv_pw = self.net.sgen.at[ids.get('pv'), 'p_mw']
-        wt_pw = self.net.gen.at[ids.get('wt'), 'p_mw']
-        cdg_pw = self.net.gen.at[ids.get('dg'), 'p_mw']
+        #interval optimisation
+        line_losses_max, self.net = network_comp(TIMESTEPS = (time,time),scaled_action = action, interval = "max")
+        pv_pw_max = self.net.sgen.at[ids.get('pv'), 'p_mw']
+        wt_pw_max = self.net.gen.at[ids.get('wt'), 'p_mw']
+        cdg_pw_max = self.net.gen.at[ids.get('dg'), 'p_mw']
+        
+        line_losses_min, self.net = network_comp(TIMESTEPS = (time,time),scaled_action = action, interval = "min")
+        pv_pw_min = self.net.sgen.at[ids.get('pv'), 'p_mw']
+        wt_pw_min = self.net.gen.at[ids.get('wt'), 'p_mw']
+        cdg_pw_min = self.net.gen.at[ids.get('dg'), 'p_mw']       
+        
         market_price = self.market_prices[time]
         load_before_curtail = self.original_datasource_consumers.iloc[time]
         P_demand_active = load_before_curtail.loc[self.curtailment_indices]
@@ -74,16 +105,21 @@ class MicrogridEnv():
 
         #populate st+1
         next_state = np.array([0] * N_OBS).astype(np.float32)
-        next_state[IDX_POWER_GEN] = np.float32(cdg_pw)
-        next_state[IDX_PREV_GEN_COST] = np.float32(generation_cost)
-        next_state[IDX_MARKET_PRICE] = np.float32(market_price)
-        next_state[IDX_PREV_POWER_TRANSFER_COST] = np.float32(power_transfer_cost)
-        next_state[PREV_MGO_PROFIT] = np.float32(mgo_profit)
-        next_state[IDX_SOLAR] = np.float32(pv_pw)
-        next_state[IDX_WIND] = np.float32(wt_pw)
+        next_state[IDX_POWER_GEN_MAX] = np.float32(cdg_pw_max) #IT
+        next_state[IDX_POWER_GEN_MIN] = np.float32(cdg_pw_min) #IT        
+        next_state[IDX_PREV_GEN_COST] = np.float32(generation_cost) #mean taken
+        next_state[IDX_MARKET_PRICE] = np.float32(market_price) 
+        next_state[IDX_PREV_POWER_TRANSFER_COST] = np.float32(power_transfer_cost) #mean taken
+        next_state[PREV_MGO_PROFIT] = np.float32(mgo_profit) 
+        next_state[IDX_SOLAR_MAX] = np.float32(pv_pw_max) #IT
+        next_state[IDX_WIND_MAX] = np.float32(wt_pw_max) #IT
+        next_state[IDX_SOLAR_MIN] = np.float32(pv_pw_min) #IT
+        next_state[IDX_WIND_MIN] = np.float32(wt_pw_min) #IT
         next_state[IDX_TOTAL_LOAD] = np.float32(total_load)
-        next_state[IDX_LINE_LOSSES] = np.float32(line_losses)
-        next_state[IDX_PREV_GENPOWER] = state[IDX_POWER_GEN]
+        next_state[IDX_LINE_LOSSES_MAX] = np.float32(line_losses_max) #IT
+        next_state[IDX_LINE_LOSSES_MIN] = np.float32(line_losses_min) #IT
+        next_state[IDX_PREV_GENPOWER_MAX] = state[IDX_POWER_GEN_MAX] #IT
+        next_state[IDX_PREV_GENPOWER_MIN] = state[IDX_POWER_GEN_MIN] #IT
         next_state[IDX_ACTIVE_PMW] = np.array(P_demand_active, dtype=np.float32)
         next_state[IDX_PREV_CURTAILED] = np.array(curtailed, dtype=np.float32)
         next_state[IDX_PREV_ACTIVE_PMW] = state[IDX_ACTIVE_PMW]
@@ -99,17 +135,36 @@ class MicrogridEnv():
         curtailed = scaled_action[:-1]
         incentive = scaled_action[-1]     
         P_demand_active = state[IDX_ACTIVE_PMW]
-        P_grid = state[IDX_TOTAL_LOAD] - state[IDX_WIND]- state[IDX_SOLAR] - np.sum(curtailed)
+        P_grid_max = state[IDX_TOTAL_LOAD] - state[IDX_WIND_MAX]- state[IDX_SOLAR_MAX] - np.sum(curtailed) #IT
+        P_grid_min = state[IDX_TOTAL_LOAD] - state[IDX_WIND_MIN]- state[IDX_SOLAR_MIN] - np.sum(curtailed) #IT
         discomforts = calculate_discomfort(curtailed, P_demand_active) #only 5 customers!
          
-        generation_cost = cal_costgen(state[IDX_POWER_GEN],state[IDX_PREV_GEN_COST]) 
-        power_transfer_cost = cal_costpow(state[IDX_MARKET_PRICE],P_grid,state[IDX_PREV_POWER_TRANSFER_COST]) 
+        generation_cost_max = cal_costgen(state[IDX_POWER_GEN_MAX],state[IDX_PREV_GEN_COST]) 
+        generation_cost_min = cal_costgen(state[IDX_POWER_GEN_MAX],state[IDX_PREV_GEN_COST]) 
+        generation_cost = (generation_cost_max + generation_cost_min) / 2
+        
+        power_transfer_cost_max = cal_costpow(state[IDX_MARKET_PRICE],P_grid_max,state[IDX_PREV_POWER_TRANSFER_COST]) 
+        power_transfer_cost_min = cal_costpow(state[IDX_MARKET_PRICE],P_grid_min,state[IDX_PREV_POWER_TRANSFER_COST]) 
+        power_transfer_cost = (power_transfer_cost_max + power_transfer_cost_min) / 2
+        
         mgo_profit = MGO_profit(state[IDX_MARKET_PRICE], curtailed, incentive,state[PREV_MGO_PROFIT])
-        balance_penalty = power_balance_constraint(P_grid, state[IDX_POWER_GEN], state[IDX_SOLAR], 
-                                                   state[IDX_WIND], state[IDX_TOTAL_LOAD], curtailed, 
-                                                   state[IDX_LINE_LOSSES])  # TODO what is the point of this if its hardcoded?
-        generation_penalty = generation_limit_constraint(state[IDX_POWER_GEN])
-        ramp_penalty = ramp_rate_constraint(state[IDX_POWER_GEN], state[IDX_PREV_GENPOWER],time)
+        
+        balance_penalty_max = power_balance_constraint(P_grid_max, state[IDX_POWER_GEN_MAX], state[IDX_SOLAR_MAX], 
+                                                   state[IDX_WIND_MAX], state[IDX_TOTAL_LOAD], curtailed, 
+                                                   state[IDX_LINE_LOSSES_MAX])  
+        balance_penalty_min = power_balance_constraint(P_grid_min, state[IDX_POWER_GEN_MIN], state[IDX_SOLAR_MIN], 
+                                                   state[IDX_WIND_MIN], state[IDX_TOTAL_LOAD], curtailed, 
+                                                   state[IDX_LINE_LOSSES_MIN])  
+        balance_penalty = (balance_penalty_max + balance_penalty_min) / 2
+
+        generation_penalty_max = generation_limit_constraint(state[IDX_POWER_GEN_MAX])
+        generation_penalty_min = generation_limit_constraint(state[IDX_POWER_GEN_MIN])
+        generation_penalty = (generation_penalty_max + generation_penalty_min) / 2
+
+        ramp_penalty_max = ramp_rate_constraint(state[IDX_POWER_GEN_MAX], state[IDX_PREV_GENPOWER_MAX],time)
+        ramp_penalty_min = ramp_rate_constraint(state[IDX_POWER_GEN_MIN], state[IDX_PREV_GENPOWER_MIN],time)
+        ramp_penalty = (ramp_penalty_max + ramp_penalty_min) / 2
+
         curtailment_penalty = curtailment_limit_constraint(curtailed, state[IDX_ACTIVE_PMW]) 
         daily_curtailment_penalty = daily_curtailment_limit(curtailed, state[IDX_ACTIVE_PMW],    
                                                             state[IDX_PREV_CURTAILED], state[IDX_PREV_ACTIVE_PMW])
@@ -142,23 +197,8 @@ class MicrogridEnv():
         """
         Reset the environment to its initial state and return the initial observation.
         """
-        self.net = self.init_net #reset net
-        state = np.array([0] * N_OBS).astype(np.float32)
-        
-        # Populate the state array
-        state[IDX_POWER_GEN] = np.float32(self.init_cdg_pw)
-        state[IDX_MARKET_PRICE] = np.float32(self.init_market_price)
-        state[IDX_SOLAR] = np.float32(self.init_pv_pw)
-        state[IDX_WIND] = np.float32(self.init_wt_pw)
-        state[IDX_TOTAL_LOAD] = np.float32(self.init_total_load)
-        state[IDX_LINE_LOSSES] = np.float32(self.init_line_losses)
-        state[IDX_ACTIVE_PMW] = np.array(self.init_P_demand_active, dtype=np.float32)
-        state[IDX_MINMARKET_PRICE] = self.init_market_price 
-        state[IDX_PREV_GEN_COST] = 0  
-        state[IDX_PREV_POWER_TRANSFER_COST] = 0  
-        state[IDX_PREV_ACTIVE_BENEFIT] = 0  
-        state[IDX_PREV_BUDGET] = 0 
-        
-
+        self.net = self.init_net_max
+        state = self.state_init
+    
         return state
 

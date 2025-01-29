@@ -54,7 +54,7 @@ logging.basicConfig(
     level=logging.INFO,  # Set the logging level
     format='%(asctime)s - %(levelname)s - %(message)s',  # Set the format of the log messages
     handlers=[
-        logging.FileHandler("rewards_log.txt"),  # Write logs to a file
+        logging.FileHandler("rewards_log_debug.txt"),  # Write logs to a file
         logging.StreamHandler()  # Optionally, also print logs to the console
     ]
 )
@@ -262,33 +262,11 @@ def log_actor_critic_info(actor_loss, critic_loss, t=None, freq=20, **kwargs):
         logging.info(f'actor loss = {actor_loss}')
         logging.info(f'critic loss = {critic_loss}')
 
-def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_action=None, state=None, **kwargs):
-    """
+def log_calc_rewards(t, source='', freq=1, penalties=None, reward=None, scaled_action=None, state=None, **kwargs):
+    """ #freq = 22
     Logs penalties, profit, and reward information at specified time intervals.
     """
-
-    # Define the mapping for state indices
-    state_names = {
-        0: "POWER_GEN",
-        1: "PREV_GEN_COST",
-        2: "MARKET_PRICE",
-        3: "PREV_POWER_TRANSFER_COST",
-        4: "PREV_MGO_PROFIT",
-        5: "SOLAR",
-        6: "WIND",
-        7: "TOTAL_LOAD",
-        8: "LINE_LOSSES",
-        9: "PREV_GENPOWER",
-    }
-
-    state_names.update({i: f"ACTIVE_PMW_CONSUMER_{i-10}" for i in range(10, 15)})
-    state_names.update({i: f"PREV_CURTAILED_CONSUMER_{i-15}" for i in range(15, 20)})
-    state_names.update({i: f"PREV_ACTIVE_PMW_CONSUMER_{i-20}" for i in range(20, 25)})
-    state_names.update({i: f"PREV_ACTIVE_BENEFIT_CONSUMER_{i-25}" for i in range(25, 30)})
-
-    state_names[30] = "MINMARKET_PRICE"
-    state_names[31] = "PREV_BUDGET"
-    if t % 22 == 0:
+    if t % freq == 0:
 
 
         # Log reward, profit, and penalties
@@ -306,7 +284,7 @@ def log_calc_rewards(t, source='', freq=5, penalties=None, reward=None, scaled_a
         if state is not None:
             logging.info("State:")
             for idx, value in enumerate(state):
-                state_name = state_names.get(idx, f"IDX_{idx}") 
+                state_name = STATE_NAMES.get(idx, f"IDX_{idx}") 
                 logging.info(f"  {state_name}: {value}")
 def log_trans_info(s, a, t, freq=100, **kwargs):
     if t % freq == 0:
