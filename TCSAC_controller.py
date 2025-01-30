@@ -41,7 +41,6 @@ from memory_profiler import profile, memory_usage
 class TCSAC():    
     def __init__(self, epsilon_p=0.001, **kwargs):
         
-        self.counter = 0
         self.critic_weight = WEIGHT_CRITIC
         self.batch_size = BATCH_SIZE
         self.alpha = TEMP
@@ -86,9 +85,9 @@ class TCSAC():
         self.soft_q_criterion2 = nn.MSELoss()
         self.soft_q_criterion3 = nn.MSELoss()
         
-        soft_q_lr = 1e-3
-        policy_lr = 1e-3
-        alpha_lr  = 1e-3
+        soft_q_lr = 1e-4
+        policy_lr = 1e-4
+        alpha_lr  = 1e-4
 
         self.soft_q_optimizer1 = optim.Adam(self.critic1.parameters(), lr=soft_q_lr)
         self.soft_q_optimizer2 = optim.Adam(self.critic2.parameters(), lr=soft_q_lr)
@@ -234,7 +233,7 @@ class TCSAC():
             transitions = [None] * int(max_steps)
             for time in range(int(max_steps)): 
                 # Sample action from policy
-                if self.counter > WARMUP:
+                if eps > WARMUP:
                     action = self.policy_net.get_action(state, deterministic=False) 
                 else:
                     action = self.policy_net.sample_action() # random action for diverse training
@@ -243,14 +242,14 @@ class TCSAC():
                 #next_state = self.obs_norm.normalize(state, update=False) # TODO do i need to normalise state?
                 
                 # Update networks if enough data is collected
-                if self.buffer.__len__() > batch_size and self.counter > WARMUP and self.counter % UPDATE_FREQ == 0: 
+                if self.buffer.__len__() > batch_size and eps > WARMUP and eps % UPDATE_FREQ == 0: 
                     self.update(batch_size)
                 transitions[time] = [torch.tensor(state), torch.tensor(action), torch.tensor(next_state), torch.tensor(reward),torch.tensor(done)]
                 
                 state = next_state
                 episode_reward += reward
                 
-                self.counter += 1
+
                 if done:
                     self.buffer.add_episodes(transitions,eps) 
                     break   

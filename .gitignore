@@ -10,6 +10,8 @@ modeL_target_critic3_weights
 modeL_critic3_weights
 rewards.npy
 rewards_log.txt
+rewards_log_debug.txt
+rewards_log_debug.txt
 env
 *.m
 *.cover

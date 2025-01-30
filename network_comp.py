@@ -14,9 +14,7 @@ import pandapower.timeseries as timeseries
 from pandapower.plotting.plotly import simple_plotly
 from pandapower.plotting.plotly import pf_res_plotly
 from pandapower.control.basic_controller import Controller
-from modifiedpowerflow import _create_J_without_numba2
 from pandapower.create import create_storage
-from pandapower.pf.create_jacobian import _create_J_without_numba
 import timeit
 
 class DG_controller(Controller):
@@ -51,8 +49,9 @@ class DG_controller(Controller):
         load_values = net.load.loc[self.curtailment_indices, "p_mw"].to_numpy()
         updated_load_values = np.maximum(load_values - self.scaled_action[:-1], 0)
         net.load.loc[self.curtailment_indices, "p_mw"] = updated_load_values
-        current_line_losses = net.res_line['pl_mw'].sum()
-        net.gen.loc[self.element_index, "p_mw"] = current_line_losses  #TODO need MNR to calculate this
+
+        #current_line_losses = net.res_line['pl_mw'].sum()
+        #net.gen.loc[self.element_index, "p_mw"] = current_line_losses  #TODO need MNR to calculate this
     def control_step(self, net):
         """
         Execute the control logic to adjust loads and generation based on action and state.
@@ -83,7 +82,7 @@ def network_comp(TIMESTEPS,scaled_action,interval):
     #  gen -> voltage controlled PV nodes. sgen -> no voltage control
     pv1 = pp.create_sgen(net, bus=13, p_mw=0, q_mvar=0, name="PV1", index = 0)
     wt1 = pp.create_gen(net, bus=4, p_mw=0.5, min_p_mw = 0, max_p_mw = WTRATED, vm_pu=1.0, name="WT1", index = 1)
-    cdg1 = pp.create_gen(net, bus=11, p_mw=0, min_p_mw=PGEN_MIN, max_p_mw=PGEN_MAX, vm_pu=1.0, name="CDG1", index = 2)
+    #cdg1 = pp.create_gen(net, bus=11, p_mw=0, min_p_mw=PGEN_MIN, max_p_mw=PGEN_MAX, vm_pu=1.0, name="CDG1", index = 2)
     dg_controller = DG_controller(net=net,element_index=2, scaled_action=scaled_action,order=1)
     #bat1 = create_storage(net, bus = 29, p_mw = 0, max_e_mwh=0)
     for i, bus in enumerate(range(32)):
@@ -106,9 +105,8 @@ def network_comp(TIMESTEPS,scaled_action,interval):
     ConstControl(net, element='sgen', variable='p_mw', element_index=pv1, 
                 profile_name=f"P_solar_{interval}", recycle=False, run_control=True, initial_powerflow=False, data_source=data_source_sun)
     # Run power flow analysis
-    #Jacobian
-    _create_J_without_numba = _create_J_without_numba2
-    timeseries.run_timeseries(net, time_steps = TIMESTEPS, verbose =0, numba = False)
+
+    timeseries.run_timeseries(net, time_steps = TIMESTEPS, verbose =0, numba = True)
     #counter = 0
     #while not np.isclose( net.res_line['pl_mw'].sum(), net.gen.at[ids.get('dg'), 'p_mw'], atol=0.0001): #100W
     #    counter +=1
@@ -120,7 +118,7 @@ def network_comp(TIMESTEPS,scaled_action,interval):
     #print(pp.diagnostic(net))
     # pv_pw = net.sgen.at[ids.get('pv'), 'p_mw']
     # wt_pw = net.gen.at[ids.get('wt'), 'p_mw']
-    cdg_pw = net.gen.at[ids.get('dg'), 'p_mw'] 
+    #cdg_pw = net.gen.at[ids.get('dg'), 'p_mw'] 
     # total_load = net.load['p_mw'].sum()
     # P_grid = total_load - pv_pw - wt_pw
 

@@ -29,7 +29,7 @@ def MGO_profit(alpha, curtailed,incentive,prev_mgo_profit):
 
 # --- Constraint Functions ---
 
-def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, total_load, curtailed, P_loss): 
+def power_balance_constraint(P_grid, P_solar, P_wind, total_load, curtailed, P_loss): 
     """
     Check the power balance constraint and return a penalty if it is not satisfied.
     total_load = sum(P_demand)
@@ -37,7 +37,7 @@ def power_balance_constraint(P_grid, P_gen, P_solar, P_wind, total_load, curtail
     P_loss = P_gen
     """
     
-    total_supply = P_grid + P_gen + P_solar + P_wind
+    total_supply = P_grid + P_solar + P_wind
     total_demand = total_load - sum(curtailed) + P_loss 
     if not np.isclose(total_supply, total_demand, atol=1e-5): # TODO check atol
         penalty = abs(total_supply - total_demand) 
