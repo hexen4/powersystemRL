@@ -34,6 +34,9 @@ classdef environment < rl.env.MATLABEnvironment
         N_OBS;
         EpisodeLogs;
         AllLogs;
+        f3;
+        f2;
+        f1;
     end
     
     properties(Access = protected)
@@ -52,13 +55,16 @@ classdef environment < rl.env.MATLABEnvironment
             ActionInfo.Name = 'Microgrid Action';
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
-            this.PENALTY_FACTOR = 1e6;
-            this.w1 = 0.5;
-            this.w2 = 0.5;
+            this.PENALTY_FACTOR = 1e3   ;
+            this.w1 = 0.2;
+            this.w2 = 0.8;
             this.H = 24;
             this.EpisodeLogs = {};   
             this.AllLogs = {};       
             this.time = 1;
+            this.f3 = 0;
+            this.f2= 0;
+            this.f1 = 0;
             %% indices of state
             this.IDX_POWER_GEN_MAX            = 1;
             this.IDX_POWER_GEN_MIN            = 2;
@@ -179,6 +185,9 @@ classdef environment < rl.env.MATLABEnvironment
             InitialObservation = this.init_obs;
             this.State = InitialObservation;
             this.time = 1;
+            this.f1 = 0;
+            this.f2 = 0;
+            this.f3 = 0;
         end
     end
     %% Optional Methods (set methods' attributes accordingly)
@@ -234,7 +243,7 @@ classdef environment < rl.env.MATLABEnvironment
     
         function penalty = generation_limit_constraint(this,P_gen)
             % Ensure the generation stays within its defined limits.
-            PGEN_MIN = 35;
+            PGEN_MIN = 10;
             PGEN_MAX = 300;
             if P_gen < PGEN_MIN
                 penalty = this.PENALTY_FACTOR * abs(PGEN_MIN - P_gen);
@@ -357,6 +366,11 @@ classdef environment < rl.env.MATLABEnvironment
             reward = -this.w1 * (generation_cost + power_transfer_cost) + this.w2 * mgo_profit...
             - balance_penalty  - daily_curtailment_penalty - consumer_benefit_penalty ...
                   - budget_limit_penalty -generation_penalty - ramp_penalty;
+
+            %log
+            this.f1 = this.f1 + power_transfer_cost;
+            this.f2 = this.f2 + generation_cost;
+            this.f3 = this.f3 + mgo_profit;
             logStruct = struct(...
             'P_grid_max', P_grid_max, ...
             'P_grid_min', P_grid_min, ...
@@ -375,6 +389,9 @@ classdef environment < rl.env.MATLABEnvironment
             'budget_limit_penalty', budget_limit_penalty, ...
             'Budget', prev_budget, ...
             'reward', reward, ...
+            'power_transfer_cost_culm', this.f1, ...
+            'generator_cost_culm', this.f2, ...
+            'mgo_profit_culm', this.f3, ...
             'action', scaled_action ...
 );
 
