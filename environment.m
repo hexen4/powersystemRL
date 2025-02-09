@@ -4,6 +4,7 @@ classdef environment < rl.env.MATLABEnvironment
         w1;
         w2;
         w3;
+        w4;
         H;
         market_prices; %$/MWh
         load_percent; 
@@ -59,9 +60,14 @@ classdef environment < rl.env.MATLABEnvironment
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
             this.PENALTY_FACTOR = 24/10;
-            this.w1 = 0.0833;
-            this.w2 = 0.8333;
-            this.w3 = 0.0834;
+            w1 = 1;
+            w2 = 1;
+            w3 = 90;
+            w4= 2;
+            this.w1 = w1/(w1+w2+w3+w4);
+            this.w2 = w2/(w1+w2+w3+w4);
+            this.w3 = w3/(w1+w2+w3+w4);
+            this.w4 = w4/(w1+w2+w3+w4);
             this.H = 24;
             this.EpisodeLogs = {};   
             this.AllLogs = {};       
@@ -287,7 +293,7 @@ classdef environment < rl.env.MATLABEnvironment
             if time == this.H
                 penalty = sum(this.PENALTY_FACTOR * abs(total_curtailment(violations) - max_curtailment(violations)));
             else
-                penalty = sum((time/10) * abs(total_curtailment(violations) - max_curtailment(violations)));
+                penalty = sum(time * (abs(total_curtailment(violations) - max_curtailment(violations))));
             end
         end 
         function [penalty, benefit_diff] = indivdiual_consumer_benefit(this,incentive, curtailed, discomforts, prev_benefit,time)
@@ -299,7 +305,7 @@ classdef environment < rl.env.MATLABEnvironment
             if time == this.H
                 penalty = sum(this.PENALTY_FACTOR * abs(benefit_diff(violations)));
             else 
-                penalty = sum((time/10) * benefit_diff(violations)) - sum((time/10) * benefit_diff(non_violations));
+                penalty = sum(time * (-benefit_diff(violations)) + sum(time * benefit_diff(non_violations)));
             end
             
         end
@@ -312,7 +318,7 @@ classdef environment < rl.env.MATLABEnvironment
             total_cost = sum(incentive .* curtailed) + prev_budget;
             if total_cost > budget
                 if time ~= this.H
-                   penalty = (time/10) *abs(total_cost - budget);
+                   penalty = time *(abs(total_cost - budget));
                 else 
                    penalty = abs(this.PENALTY_FACTOR * (total_cost - budget));
                 end
@@ -365,14 +371,22 @@ classdef environment < rl.env.MATLABEnvironment
             %Constraint 6, applied at the end of the episode with
             %intermediate penalties
             [consumer_benefit_penalty, benefit] = this.indivdiual_consumer_benefit(incentive, curtailed, discomforts, state(this.IDX_BENEFIT_SUM),time);
-                                                     
+            
+
             % Constraint 9
             [budget_limit_penalty, budget] = this.budget_limit_constraint(incentive, curtailed, state(this.IDX_BUDGET_SUM),time);
-            penalties = balance_penalty + daily_curtailment_penalty + consumer_benefit_penalty ...
-                  + budget_limit_penalty + generation_penalty + ramp_penalty;
+            %% interval optimisation
+            penalties_max = balance_penalty_max + daily_curtailment_penalty + consumer_benefit_penalty...
+                + budget_limit_penalty + generation_penalty_max + ramp_penalty_max;
+            penalties_min = balance_penalty_min + daily_curtailment_penalty + consumer_benefit_penalty...
+                + budget_limit_penalty + generation_penalty_min + ramp_penalty_min;
+            penalties = (penalties_max + penalties_min) / 2;
+            %penalties = balance_penalty + daily_curtailment_penalty + consumer_benefit_penalty ...
+            %      + budget_limit_penalty + generation_penalty + ramp_penalty;
+            
             %Compute total reward
-            reward = -this.w1 * (generation_cost + power_transfer_cost) + this.w2 * mgo_profit...
-            - this.w3 * penalties;
+            reward = -this.w1 *generation_cost - this.w2*power_transfer_cost + this.w3 * mgo_profit...
+            - this.w4 * penalties;
             
             %% add sums to next_state
             
