@@ -95,12 +95,12 @@ classdef environment < rl.env.MATLABEnvironment
             this.IDX_BUDGET_SUM              = 31; % t
             this.N_OBS = this.IDX_BUDGET_SUM;
             %% read tables
-            this.market_prices = readtable("data/solar_wind_data.csv").price;  
-            this.load_percent = readtable("data/solar_wind_data.csv").hourly_load;  
-            this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
-            this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
-            this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
-            this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
+            this.market_prices = readtable("data_MT/solar_wind_data.csv").price;  
+            this.load_percent = readtable("data_MT/solar_wind_data.csv").hourly_load;  
+            this.wt_KW_max = 1000*readtable("data_MT/wt_profile.csv").P_wind_max;
+            this.wt_KW_min = 1000*readtable("data_MT/wt_profile.csv").P_wind_min; %everything in kW
+            this.pv_KW_max = 1000*readtable("data_MT/pv_profile.csv").P_solar_max;
+            this.pv_KW_min = 1000*readtable("data_MT/pv_profile.csv").P_solar_min;  
             this.customer_ids = [9,22,14,30,25] + 1; %SS line included in customers -> +1
             this.State = zeros(this.N_OBS,1);
             this.init_obs = zeros(this.N_OBS,1);
