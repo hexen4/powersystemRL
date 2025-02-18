@@ -1,5 +1,5 @@
 function [BD,LD,TL,CPKW_before_curtailment,totalload_before_action]=ieee33(load_percent,pv,wt,curtailed)
-customer_ids = [9,22,14,30,25] + 1;
+customer_ids = [9,22,14,30,25] ;
 Vbase=11; %%---Base Voltage in kV---%%
 Sbase=10; %%---Base Power in MVA---%%
 Zbase=Vbase*Vbase/Sbase; %%---Base impedance in ohms---%%

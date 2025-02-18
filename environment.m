@@ -18,6 +18,7 @@ classdef environment < rl.env.MATLABEnvironment
         IDX_POWER_GEN_MAX; %smaller as max values used
         IDX_POWER_GEN_MIN;
         IDX_MARKET_PRICE;
+        IDX_MARKET_MINPRICE;
         IDX_SOLAR_MAX;
         IDX_SOLAR_MIN;
         IDX_WIND_MAX;
@@ -29,7 +30,9 @@ classdef environment < rl.env.MATLABEnvironment
         IDX_CURTAILED_SUM ;
         IDX_PROSUMER_SUM;
         IDX_BENEFIT_SUM;
-        IDX_BUDGET_SUM;
+        IDX_BUDGET_SUM; %maybe include discomforts as well. maybe include pgridmax pgridmin as well
+        IDX_DISCOMFORTS;
+        IDX_TIME;
         Sbase;
         PENALTY_FACTOR;
         time;
@@ -41,6 +44,7 @@ classdef environment < rl.env.MATLABEnvironment
         f3;
         f2;
         f1;
+        minprice;
     end
     
     properties(Access = protected)
@@ -51,7 +55,7 @@ classdef environment < rl.env.MATLABEnvironment
     methods              
         function this = environment()
             %% compatability with RL 
-            ObservationInfo = rlNumericSpec([31 1], ...
+            ObservationInfo = rlNumericSpec([38 1], ...
                 'LowerLimit', -inf, 'UpperLimit', inf);
             ObservationInfo.Name = 'Microgrid State';
             ActionInfo = rlNumericSpec([6 1], ...
@@ -59,11 +63,11 @@ classdef environment < rl.env.MATLABEnvironment
             ActionInfo.Name = 'Microgrid Action';
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
-            this.PENALTY_FACTOR = 24/10;
+            this.PENALTY_FACTOR = 1.8;  
             w1 = 1;
             w2 = 1;
-            w3 = 90;
-            w4= 2;
+            w3 = 20;
+            w4 = 1;
             this.w1 = w1/(w1+w2+w3+w4);
             this.w2 = w2/(w1+w2+w3+w4);
             this.w3 = w3/(w1+w2+w3+w4);
@@ -77,6 +81,16 @@ classdef environment < rl.env.MATLABEnvironment
             this.f2= 0;
             this.f1 = 0;
             this.lambda_ = 0.4;
+            %%battery 
+            %this.SOC_max = 4; %MWh
+            %this.SOC_min = 1; %MWh
+            %this.SOC_init = 2; %Mwh
+            %this.battery_efficiency = 95; %percent
+            %this.maxcharge = 1; %MW
+            % decision variables -> charging power, discharging power. need
+            % if else statement, cannot charge and discharge at the same
+            % time. need to include in PF (buying more fuel at lower
+            % prices)
             %% indices of state
             this.IDX_POWER_GEN_MAX            = 1; %matching prev line losses
             this.IDX_POWER_GEN_MIN            = 2; %matching prev line losses (i.e. at t = 2, power_gen = line losses at t = 1)
@@ -93,15 +107,20 @@ classdef environment < rl.env.MATLABEnvironment
             this.IDX_CURTAILED_SUM            = 21:25;   % t
             this.IDX_BENEFIT_SUM              = 26:30;   % t
             this.IDX_BUDGET_SUM              = 31; % t
-            this.N_OBS = this.IDX_BUDGET_SUM;
+            this.IDX_MARKET_MINPRICE = 32;
+            this.IDX_DISCOMFORTS = 33:37;
+            this.IDX_TIME = 38;
+
+            %this.SOC = 33;
+            this.N_OBS = this.IDX_TIME;
             %% read tables
-            this.market_prices = readtable("data_MT/solar_wind_data.csv").price;  
-            this.load_percent = readtable("data_MT/solar_wind_data.csv").hourly_load;  
-            this.wt_KW_max = 1000*readtable("data_MT/wt_profile.csv").P_wind_max;
-            this.wt_KW_min = 1000*readtable("data_MT/wt_profile.csv").P_wind_min; %everything in kW
-            this.pv_KW_max = 1000*readtable("data_MT/pv_profile.csv").P_solar_max;
-            this.pv_KW_min = 1000*readtable("data_MT/pv_profile.csv").P_solar_min;  
-            this.customer_ids = [9,22,14,30,25] + 1; %SS line included in customers -> +1
+            this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
+            this.load_percent = readtable("data/Copy_of_solar_wind_data.csv").hourly_load;  
+            this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
+            this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
+            this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
+            this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
+            this.customer_ids = [9,22,14,30,25] ; %SS line included in customers -> +1
             this.State = zeros(this.N_OBS,1);
             this.init_obs = zeros(this.N_OBS,1);
 
@@ -118,19 +137,27 @@ classdef environment < rl.env.MATLABEnvironment
             [init_Yb_min] = Ybus(init_LD_min,nbr,nbus);
             [init_Vmag_min, init_theta_min, init_Pcalc_min, init_Qcalc_min]= NR_zero_PQVdelta(init_BD_min,init_Yb_min,nbus); 
 
-            this.init_obs(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(init_Pcalc_max(12,1));
-            this.init_obs(this.IDX_POWER_GEN_MIN) = 1000*this.Sbase*single(init_Pcalc_min(12,1));
+            this.init_obs(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(init_BD_max(12,7) + init_Pcalc_max(12,1)); %fix this
+            this.init_obs(this.IDX_POWER_GEN_MIN) = 1000*this.Sbase*single(init_BD_min(12,7) + init_Pcalc_min(12,1)); %fix this
             this.init_obs(this.IDX_TOTAL_LOAD)      = single(sumload_b4_action);
             this.init_obs(this.IDX_PROSUMER_PKW)      = single(CPKW_b4_action);
             this.init_obs(this.IDX_MARKET_PRICE) = single(this.market_prices(1));
+            this.init_obs(this.IDX_MARKET_MINPRICE) = single(this.market_prices(1));
             this.init_obs(this.IDX_SOLAR_MAX)       = single(this.pv_KW_max(1));
             this.init_obs(this.IDX_WIND_MAX)        = single(this.wt_KW_max(1));
             this.init_obs(this.IDX_SOLAR_MIN)       = single(this.pv_KW_min(1));
             this.init_obs(this.IDX_WIND_MIN)        = single(this.wt_KW_min(1)); 
             this.init_obs(this.IDX_PROSUMER_SUM) = this.lambda_ * single(this.init_obs(this.IDX_PROSUMER_PKW));
+            this.init_obs(this.IDX_TIME) = 1;
+            this.init_obs(this.IDX_PREV_GENPOWER_MAX) = 0;
+            this.init_obs(this.IDX_PREV_GENPOWER_MIN) = 0;
+            this.init_obs(this.IDX_CURTAILED_SUM) = zeros(5,1);
+            this.init_obs(this.IDX_BENEFIT_SUM) = zeros(5,1);
+            this.init_obs(this.IDX_DISCOMFORTS) = zeros(5,1); 
+            this.init_obs(this.IDX_BUDGET_SUM) = 0;
+
             %others are 0 either due to 0 curtailment or no prev gen power
-            this.State = this.init_obs;            
- 
+            this.State = this.init_obs;          
         end
     
         function next_state = update_state(this, State, Action, time)
@@ -149,9 +176,10 @@ classdef environment < rl.env.MATLABEnvironment
             
             %% Initialize next state (s_{t+1})
             next_state = zeros(this.N_OBS, 1);
-            next_state(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(Pcalc_max(12,1)); %pgen to match prev time
-            next_state(this.IDX_POWER_GEN_MIN) = 1000*this.Sbase*single(Pcalc_min(12,1)); 
+            next_state(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(BD_max(12,7) + Pcalc_max(12,1)); %pgen to match prev time
+            next_state(this.IDX_POWER_GEN_MIN) = 1000*this.Sbase*single(BD_min(12,7) +Pcalc_min(12,1)); 
             next_state(this.IDX_MARKET_PRICE) = this.market_prices(time);
+            next_state(this.IDX_MARKET_MINPRICE) = min(this.market_prices(time),this.State(this.IDX_MARKET_MINPRICE));
             next_state(this.IDX_SOLAR_MAX) = single(this.pv_KW_max(time));
             next_state(this.IDX_SOLAR_MIN) = single(this.pv_KW_min(time));
             next_state(this.IDX_WIND_MAX) = single(this.wt_KW_max(time));
@@ -160,18 +188,20 @@ classdef environment < rl.env.MATLABEnvironment
             next_state(this.IDX_PREV_GENPOWER_MAX) = State(this.IDX_POWER_GEN_MAX);
             next_state(this.IDX_PREV_GENPOWER_MIN) = State(this.IDX_POWER_GEN_MIN);
             next_state(this.IDX_PROSUMER_PKW) = single(CPKW_b4_action); %before curtailment
-            %next_state(this.IDX_PREV_CURTAILED) = single(prev_curtailed); %for constraint
-            %next_state(this.IDX_PREV_ACTIVE_PKW) = State(this.IDX_PROSUMER_PKW);
-            %next_state(this.IDX_PREV_ACTIVE_BENEFIT) = single(prev_benefit);
-            %next_state(this.IDX_PREV_BUDGET) = single(prev_budget);
+            next_state(this.IDX_PROSUMER_SUM) = this.lambda_ * next_state(this.IDX_PROSUMER_PKW) + this.State(this.IDX_PROSUMER_SUM);
+            next_state(this.IDX_CURTAILED_SUM) = prev_curtailed + this.State(this.IDX_CURTAILED_SUM); %for constraint
+            next_state(this.IDX_TIME) = time;
 
         end
 
         function [Observation,Reward,IsDone] = step(this,Action)
         %% Get action limits
-        max_incentive = 0.4*this.market_prices(this.time); %constraint 8
+
+        min_incentive = this.State(this.IDX_MARKET_MINPRICE)*0.4;
+        max_incentive = this.State(this.IDX_MARKET_MINPRICE); %constraint 8
         max_action = [0.6.*this.State(this.IDX_PROSUMER_PKW); max_incentive]; %constraint 4
-        Action = this.scale_action(Action,max_action);
+        min_action = [zeros(5,1);min_incentive];
+        Action = this.scale_action(Action,max_action,min_action);
 
         %% Update state 
         this.time = this.time + 1;
@@ -187,7 +217,7 @@ classdef environment < rl.env.MATLABEnvironment
         if IsDone
             this.AllLogs{end+1} = this.EpisodeLogs;
             this.EpisodeLogs = {};
-            %this.reset();
+            this.reset();
         end
 
     end
@@ -206,17 +236,16 @@ classdef environment < rl.env.MATLABEnvironment
     end
     %% Optional Methods (set methods' attributes accordingly)
     methods     
-        function action = scale_action(this,nn_action, max_action)
-            min_action = zeros(6,1);
-            action = nn_action .* (max_action - min_action);
+        function action = scale_action(this,nn_action, max_action, min_action)
+            action = min_action + (nn_action) .* (max_action - min_action);
             action = min( max(action, min_action), max_action );
         end
-        % (optional) Properties validation through set methods
-        function set.State(this,state)
-            validateattributes(state,{'numeric'},{31},'','State');
-            this.State = double(state(:));
-            notifyEnvUpdated(this);
-        end
+        %(optional) Properties validation through set methods
+        % function set.State(this,state)
+        %     validateattributes(state,{'numeric'},{32},'','State');
+        %     this.State = double(state(:));
+        %     notifyEnvUpdated(this);
+        % end
         function discomforts = calculate_discomforts(this,xjh,pjh)
              CONSUMER_BETA = [1,2,2,3,3];
              discomforts = exp(CONSUMER_BETA' .* (xjh ./ pjh)) - 1;
@@ -257,7 +286,7 @@ classdef environment < rl.env.MATLABEnvironment
     
         function penalty = generation_limit_constraint(this,P_gen)
             % Ensure the generation stays within its defined limits.
-            PGEN_MIN = 10;
+            PGEN_MIN = 35;
             PGEN_MAX = 300;
             if P_gen < PGEN_MIN
                 penalty = this.PENALTY_FACTOR * abs(PGEN_MIN - P_gen);
@@ -271,7 +300,7 @@ classdef environment < rl.env.MATLABEnvironment
         function penalty = ramp_rate_constraint(this,P_gen, P_gen_prev, time)
             PRAMPUP = 70;
             PRAMPDOWN = 50;
-            if time == 0
+            if time == 1
                 penalty = 0;
                 return;
             end
@@ -286,29 +315,25 @@ classdef environment < rl.env.MATLABEnvironment
         end
     
     
-        function penalty = daily_curtailment_limit(this,curtailed, P_active_demand, prev_curtailed, prev_P_active_demand, time)
-            max_curtailment = this.lambda_ .* P_active_demand + prev_P_active_demand;
-            total_curtailment = curtailed + prev_curtailed;
-            violations = total_curtailment > max_curtailment;
-            if time == this.H
-                penalty = sum(this.PENALTY_FACTOR * abs(total_curtailment(violations) - max_curtailment(violations)));
-            else
-                penalty = sum(time * (abs(total_curtailment(violations) - max_curtailment(violations))));
-            end
+        function penalty = daily_curtailment_limit(this,curtailed_sum, P_demand_sum, time)
+
+            violations = curtailed_sum > P_demand_sum;
+
+            %penalty = sum(this.PENALTY_FACTOR^time * (abs(curtailed_sum(violations) - P_demand_sum(violations))));
+            penalty = sum((abs(curtailed_sum(violations) - P_demand_sum(violations))));
+
         end 
         function [penalty, benefit_diff] = indivdiual_consumer_benefit(this,incentive, curtailed, discomforts, prev_benefit,time)
-            epsilon = 0.5;
+            epsilon = [1;0.9;0.7;0.6;0.4];
             curtailed = curtailed ./ 1000;
-            benefit_diff = (epsilon * incentive .* curtailed - (1 - epsilon) .* discomforts) + prev_benefit;
+            benefit_diff = (epsilon .* incentive .* curtailed - (1 - epsilon) .* discomforts) + prev_benefit;
             violations = benefit_diff < 0;
             non_violations = ~violations;
-            if time == this.H
-                penalty = sum(this.PENALTY_FACTOR * abs(benefit_diff(violations)));
-            else 
-                penalty = sum(time * (-benefit_diff(violations)) + sum(time * benefit_diff(non_violations)));
-            end
             
-        end
+            %penalty = sum(this.PENALTY_FACTOR^time * (-benefit_diff(violations)) + sum(this.PENALTY_FACTOR^time * benefit_diff(non_violations)));
+            %penalty = sum(abs(benefit_diff(violations)));
+            penalty = -sum(benefit_diff);
+            end
    
     
         function [penalty, total_cost] = budget_limit_constraint(this,incentive, curtailed, prev_budget,time)
@@ -317,11 +342,9 @@ classdef environment < rl.env.MATLABEnvironment
             budget = 500;
             total_cost = sum(incentive .* curtailed) + prev_budget;
             if total_cost > budget
-                if time ~= this.H
-                   penalty = time *(abs(total_cost - budget));
-                else 
-                   penalty = abs(this.PENALTY_FACTOR * (total_cost - budget));
-                end
+
+               penalty = (abs(total_cost - budget));
+
             else
                 penalty = 0;
             end
@@ -366,7 +389,7 @@ classdef environment < rl.env.MATLABEnvironment
         
             %Constraint 5, applied at the end of the episode with
             %intermediate penalties
-            daily_curtailment_penalty = this.daily_curtailment_limit(curtailed, state(this.IDX_PROSUMER_PKW), state(this.IDX_CURTAILED_SUM), state(this.IDX_PROSUMER_SUM),time);
+            daily_curtailment_penalty = this.daily_curtailment_limit(next_state(this.IDX_CURTAILED_SUM), next_state(this.IDX_PROSUMER_SUM),time);
                                                                                         
             %Constraint 6, applied at the end of the episode with
             %intermediate penalties
@@ -376,24 +399,29 @@ classdef environment < rl.env.MATLABEnvironment
             % Constraint 9
             [budget_limit_penalty, budget] = this.budget_limit_constraint(incentive, curtailed, state(this.IDX_BUDGET_SUM),time);
             %% interval optimisation
-            penalties_max = balance_penalty_max + daily_curtailment_penalty + consumer_benefit_penalty...
-                + budget_limit_penalty + generation_penalty_max + ramp_penalty_max;
-            penalties_min = balance_penalty_min + daily_curtailment_penalty + consumer_benefit_penalty...
-                + budget_limit_penalty + generation_penalty_min + ramp_penalty_min;
+            consumer_benefit_limit = max(-200,time^1.5*consumer_benefit_penalty); %clip at -30 for maximum benefit
+            penalties_max = time^2 * (balance_penalty_max  + daily_curtailment_penalty...
+                + budget_limit_penalty + generation_penalty_max + ramp_penalty_max) + consumer_benefit_limit ;
+            penalties_min = time^2 * (balance_penalty_min  + daily_curtailment_penalty...
+                + budget_limit_penalty + generation_penalty_min + ramp_penalty_min) + consumer_benefit_limit;
             penalties = (penalties_max + penalties_min) / 2;
-            %penalties = balance_penalty + daily_curtailment_penalty + consumer_benefit_penalty ...
-            %      + budget_limit_penalty + generation_penalty + ramp_penalty;
-            
+
             %Compute total reward
             reward = -this.w1 *generation_cost - this.w2*power_transfer_cost + this.w3 * mgo_profit...
             - this.w4 * penalties;
-            
+            % if time == 24
+            %     if penalties < 100 & mgo_profit > 250
+            %         reward = reward + 1000*(mgo_profit - 250);
+            %     elseif penalties > 1e3 & mgo_profit < 200
+            %         reward = reward - 1000*(200 - mgo_profit);
+            %     end
+            % end
+            %reward = reward / 10^6; %scale between [-1,1]
             %% add sums to next_state
-            
-            next_state(this.IDX_CURTAILED_SUM) = curtailed + state(this.IDX_CURTAILED_SUM); %for constraint
-            next_state(this.IDX_PROSUMER_SUM) = this.lambda_ * next_state(this.IDX_PROSUMER_PKW) + state(this.IDX_PROSUMER_SUM);
+           
             next_state(this.IDX_BENEFIT_SUM) = single(benefit);
             next_state(this.IDX_BUDGET_SUM) = single(budget);
+            next_state(this.IDX_DISCOMFORTS) = single(discomforts);
             Observation_updated = next_state;
             %log
             this.f1 = this.f1 + power_transfer_cost;
@@ -416,11 +444,12 @@ classdef environment < rl.env.MATLABEnvironment
             'consumer_benefit_penalty', consumer_benefit_penalty, ...
             'Benefit', benefit, ...
             'budget_limit_penalty', budget_limit_penalty, ...
-            'Budget', budget, ... 
+            'Budget', budget, ...   
             'reward', reward, ...
             'power_transfer_cost_culm', this.f1, ...
             'generator_cost_culm', this.f2, ...
             'mgo_profit_culm', this.f3, ...
+            'sum_penalties', this.f4, ...
             'action', scaled_action ...
 );
 
