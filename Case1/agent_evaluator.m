@@ -1,7 +1,7 @@
 clearvars -except saved_agent agent1_Trained_1
 % close all
 
-env = new_environment();
+env = Copy_of_environment();
 T = 24; 
 observations = zeros(env.N_OBS, T+1);
 rewards = zeros(1, T);
