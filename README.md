@@ -1,78 +1,37 @@
 # **PowerSystemRL**
 
-A Python-based repository for implementing advanced reinforcement learning (RL) algorithms for microgrid energy management. This project leverages the **Triplet-Critic Soft Actor-Critic (TCSAC)** algorithm to manage renewable energy uncertainties, optimize costs, and ensure system stability.
+A MATLAB-based repository for implementing advanced reinforcement learning (RL) algorithms for microgrid energy management with HILF-events.
 
 ---
 
-## **Features**
-
-### **1. Advanced RL Integration**
-- Implements **Triplet-Critic Soft Actor-Critic (TCSAC)**:
-  - Reduces value estimation bias with a triple-critic mechanism.
-  - Incorporates entropy regularization for enhanced exploration.
-- Includes other algorithms such as **PPO** and **TD3**.
-
-### **2. Interval-Based Renewable Energy Modeling**
-- Simulates uncertainties in solar and wind power outputs.
-- Uses interval variables for more realistic power system behavior.
-
-### **3. Comprehensive Reward Function**
-- Balances **economic costs**, **network losses**, and **system stability**.
-- Dynamically penalizes renewable energy curtailment and state violations.
-
-### **4. Prioritized Experience Replay**
-- Replay buffer prioritizes critical transitions for enhanced learning.
-- Focuses on transitions violating constraints for faster convergence.
-
-### **5. Multi-Objective Optimization**
-- Manages energy dispatch across **economic**, **stability**, and **operational constraints**.
-
----
 
 ## **Requirements**
-- **Python 3.12.5+**
-- Install requirements
-Install the dependencies using:
-
-pip install -r requirements.txt
----
-
-## **Installation**
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/hexen4/powersystemRL.git
-   cd powersystemRL
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+- **MATLAB R2023a**
+- Install add-ons
+Install the following:
+MATLAB                                                Version 9.14        (R2023a)
+Control System Toolbox                                Version 10.13       (R2023a)
+Deep Learning Toolbox                                 Version 14.6        (R2023a)
+Global Optimization Toolbox                           Version 4.8.1       (R2023a)
+Optimization Toolbox                                  Version 9.5         (R2023a)
+Parallel Computing Toolbox                            Version 7.8         (R2023a)
+Reinforcement Learning Toolbox                        Version 2.4         (R2023a)
+Statistics and Machine Learning Toolbox               Version 12.5        (R2023a)
 
 
 ## **Usage**
 
 ### **Training**
-Run the `main.py` script to train an RL agent:
-```bash
-python -m TCASC_controller()
-```
+1) Set training = 1 in relevant environment and run
+2) If using SAC / TD3, run actor_generator.mlx
+3) Open RL Toolbox and insert relevant hyperparameters / agents
+
+### **Testing**
+
+1) Set training = 0
+2) Use agent_evaluator for detailed results
 
 
-## **Project Structure**
-
-```plaintext
-.
-├── controllers/             # RL agent implementations (PPO, TD3, TCSAC)
-├── data/                    # Renewable profiles, load, and price data
-├── utils/                   # Utility functions for normalization, scaling, and plotting
-├── microgrid_env.py         # Microgrid environment simulation
-├── models.py                # Neural network models for RL agents
-├── buffer.py                # Replay buffer implementations
-├── constraints_rewards.py   # Constraint functions and reward logic
-├── main.py                  # Entry point for training and evaluation
-├── setting.py               # Hyperparameters and environment constants
-├── README.md                # Project documentation
-```
 
 ## **Environment Details**
 The environment simulates a *IEEE34* with the following components:
