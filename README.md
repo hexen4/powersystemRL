@@ -22,8 +22,8 @@ Statistics and Machine Learning Toolbox               Version 12.5        (R2023
 ## **Usage**
 
 ### **Training**
-1) Set training = 1 in relevant environment and run
-2) If using SAC / TD3, run actor_generator.mlx
+1) Set training = 1 in relevant environment(i.e. case2/copyt_of_environment_case3) and run
+2) If using SAC / TD3, run actor_generator.mlx and use case2/tanh_case3.
 3) Open RL Toolbox and insert relevant hyperparameters / agents
 
 ### **Testing**
