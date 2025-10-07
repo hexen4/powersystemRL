@@ -1,19 +1,14 @@
-clearvars -except saved_agent agent1_Trained_1
-% close all
-
 env = Copy_of_environment();
 T = 24; 
 observations = zeros(env.N_OBS, T+1);
 rewards = zeros(1, T);
-Action_scaled = zeros(6,T);
-Action = zeros(6,T);
+Action_scaled = zeros(33,T);
+Action = zeros(33,T);
 done_flags = false(1, T);
-zero_action = [0.3*ones(5,1);0]; 
+zero_action = zeros(33,1); 
 trained = 0;
-if trained == 0
-    agent = saved_agent;
-    agent.UseExplorationPolicy = 0;
-end
+%agent = load('saved_sessions\9bbestagent(full).mat').saved_agent;
+%agent = agent1_Trained_Trained;
 observations(:,1) = env.State;  
 tic;
 for t = 1:T
@@ -27,8 +22,8 @@ for t = 1:T
     min_incentive = currentObs(env.IDX_MARKET_MINPRICE)*0.3;
     max_incentive = currentObs(env.IDX_MARKET_MINPRICE); %constraint 8
     %max_action = [0.6*420.*ones(5,1); max_incentive]; %constraint 4
-    max_action = [0.6*currentObs(11:15); max_incentive]; %constraint 4
-    min_action = [zeros(5,1);min_incentive];
+    max_action = [0.6*currentObs(env.IDX_PROSUMER_PKW); max_incentive]; %constraint 4
+    min_action = [zeros(32,1);min_incentive];
     action_scaled = env.scale_action(action,max_action,min_action);
     Action_scaled(:,t) = action_scaled;
     Action(:,t) = action;
@@ -47,8 +42,8 @@ end
 elapsed_time = toc; % Stop timer and get elapsed time in seconds
 fprintf('Total elapsed time: %.4f seconds\n', elapsed_time);
 Vmag = zeros(66,24);
-curtailed = Action_scaled(1:5,:);
-incentives = Action_scaled(6,:);
+curtailed = Action_scaled(1:32,:);
+incentives = Action_scaled(33,:);
 %% plotting penalties
 for i= 1:T
     P_grid_max(i) = env.EpisodeLogs{1, i}.P_grid_max;
@@ -62,7 +57,7 @@ for i= 1:T
     f1scaled(i) =-env.w1*env.EpisodeLogs{1, i}.power_transfer_cost_culm;
     f2scaled(i) =-env.w2*env.EpisodeLogs{1, i}.generator_cost_culm;
     f3scaled(i) =env.w3*env.EpisodeLogs{1, i}.mgo_profit_culm;
-    f4scaled(i) =-env.w4*env.EpisodeLogs{1, i}.sum_penalties;
+    f4scaled(i) =env.EpisodeLogs{1, i}.sum_penalties;
     %Vmag(:,i) = env.EpisodeLogs{1, i}.vmagdata;
     %action_penalties(i) = env.EpisodeLogs{1, i}.action_penalty;
     %penalties_sum(i) = env.EpisodeLogs{1, i}.sum_penalties;
@@ -105,14 +100,14 @@ disp("Total curtailed" + total_curt)
 % plot(curtailed')
 % legend("C1","C2","C3","C4","C5")
 % 
-% %% plotting obj. function
-% figure()
-% plot(consumer_penalty)
-% hold on
-% plot(daily)
-% hold on
-% plot(mgo_profit_timestep)
-% legend("consumer","daily","mgo_timestep")
+%% plotting obj. function
+figure()
+plot(consumer_penalty)
+hold on
+plot(daily)
+hold on
+plot(mgo_profit_timestep)
+legend("consumer","daily","mgo_timestep")
 
 
 %% verify action constraints true 
@@ -120,35 +115,35 @@ disp("Total curtailed" + total_curt)
 % constraint = scaled_obs - Action_scaled(1:5,:) < 0;
 
 % %%PH fig.5 
-grid_mean = (P_grid_min + P_grid_max) / 2;
-WT_mean = (observations(6,:) + observations(7,:)) / 2;
-PV_mean = (observations(4,:) + observations(5,:)) / 2;
-gen_power_mean = (observations(1,:) + observations(2,:)) / 2;
-grid_mean = (P_grid_max);
-WT_mean = (observations(6,:));
-PV_mean = (observations(4,:));
-gen_power_mean = (observations(1,:));
-load("obs_noaction.mat")
-load_demand = observations(8,1:24)-sum(curtailed,1);
-data = [grid_mean;WT_mean(1:24);PV_mean(1:24);gen_power_mean(1:24)]';
-bar(data,'stacked')
-hold on
-plot(load_demand, LineWidth=2)
-hold on
-plot(observations_noDR(8,1:24),LineWidth=2)
-
-legend("Power exchange between grid and MG", ...
-    "Power output of wind-based DG","Power output of solar-based DG", ...
-    "Power output of conventional DG","Post DR load demand","Actual load demand")
-ylabel("Power (KW)")
-xlabel("Time (Hour)")
-set(gca, 'FontName', 'Times', 'FontSize', 24, 'FontWeight', 'bold');
-ax = gca;
-set(gcf, 'Position', [100, 100, 1000, 800]); 
-legend('Location', 'southeast');
-% Set background to white for better appearance:
-set(gcf,'Color','w');
+% grid_mean = (P_grid_min + P_grid_max) / 2;
+% WT_mean = (observations(6,:) + observations(7,:)) / 2;
+% PV_mean = (observations(4,:) + observations(5,:)) / 2;
+% gen_power_mean = (observations(1,:) + observations(2,:)) / 2;
+% grid_mean = (P_grid_max);
+% WT_mean = (observations(6,:));
+% PV_mean = (observations(4,:));
+% gen_power_mean = (observations(1,:));
+% load("savedconstants/obs_noaction.mat")
+% load_demand = observations(8,1:24)-sum(curtailed,1);
+% data = [grid_mean;WT_mean(1:24);PV_mean(1:24);gen_power_mean(1:24)]';
+% bar(data,'stacked')
+% hold on
+% plot(load_demand, LineWidth=2)
+% hold on
+% plot(observations_noDR(8,1:24),LineWidth=2)
 % 
+% legend("Power exchange between grid and MG", ...
+%     "Power output of wind-based DG","Power output of solar-based DG", ...
+%     "Power output of conventional DG","Post DR load demand","Actual load demand")
+% ylabel("Power (KW)")
+% xlabel("Time (Hour)")
+% set(gca, 'FontName', 'Times', 'FontSize', 24, 'FontWeight', 'bold');
+% ax = gca;
+% set(gcf, 'Position', [100, 100, 1000, 800]); 
+% legend('Location', 'southeast');
+% % Set background to white for better appearance:
+% set(gcf,'Color','w');
+% % 
 % % Save figure as PNG at high resolution (e.g., 300 dpi):
 % print(gcf, 'fig5b.png', '-dpng', '-r800');
 
