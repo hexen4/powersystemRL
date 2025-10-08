@@ -27,7 +27,6 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         n_cust;
         Sbase;
         PENALTY_FACTOR;
-        Zbase;
         N_OBS;
         discomforts;
         lambda_;
@@ -65,7 +64,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         % Termination Flag
         IsDone = false;  
         training = 0;
-        reconfiguration = 1;
+        reconfiguration = 0;
     end
 
     methods              
@@ -96,8 +95,6 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.f1 = 0;
             this.lambda_ = 0.4;
             this.n_cust = 32;
-            this.Sbase = 10; %MVA
-            this.Zbase = 121/10;
             %% indices of state
             this.IDX_POWER_GEN_MAX            = 1; %matching prev line losses
             this.IDX_POWER_GEN_MIN            = 2; %matching prev line losses (i.e. at t = 2, power_gen = line losses at t = 1)
@@ -144,26 +141,20 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.Sbase = 10; %MVA
             %% reconfiguration
             if this.reconfiguration == 1
-                [LD_new_max,~] = reconfiguration_func(this.load_resi(1), ...
+                [LD_new,~] = reconfiguration_func(this.load_resi(1), ...
                 this.load_comm(1),this.load_indu(1), this.pv_KW_max(1), ...
                 this.wt_KW_max(1),zeros(this.n_cust,1),this.training);
-                [LD_new_min,~] = reconfiguration_func(this.load_resi(1), ...
-                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1), ...
-                this.wt_KW_min(1),zeros(this.n_cust,1),this.training);
-
-                LD_new_max(:,4:5)=LD_new_max(:,4:5)*this.Zbase;
-                LD_new_min(:,4:5)=LD_new_min(:,4:5)*this.Zbase;
-
+                LD_new(:,4:5)=LD_new(:,4:5)*this.Zbase;
                 [init_BD_max,init_LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(1), ...
-                this.load_comm(1),this.load_indu(1),this.pv_KW_max(1),this.wt_KW_max(1),zeros(this.n_cust,1),LD_new_max);
+                this.load_comm(1),this.load_indu(1),this.pv_KW_max(1),this.wt_KW_max(1),zeros(this.n_cust,1),LD_new);
                 [init_BD_min,init_LD_min,TL,~,~]= ieee33(this.load_resi(1), ...
-                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1),LD_new_min);
+                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1),LD_new);
             
             else
                 [init_BD_max,init_LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(1), ...
                     this.load_comm(1),this.load_indu(1),this.pv_KW_max(1),this.wt_KW_max(1),zeros(this.n_cust,1));
                 [init_BD_min,init_LD_min,TL,~,~]= ieee33(this.load_resi(1), ...
-                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1));
+                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1))
             end
             %% power flow
             nbr=size(init_LD_max,1);
@@ -211,7 +202,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
 
                 [BD_max,LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(time-1), ...
                 this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1),this.wt_KW_max(time-1),prev_curtailed,LD_new_max);
-                [BD_min,LD_min,TL,~,~]= ieee33(this.load_resi(time-1), ...
+                [BD_max,LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(time-1), ...
                 this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1),this.wt_KW_min(time-1),prev_curtailed,LD_new_min);
             
             else

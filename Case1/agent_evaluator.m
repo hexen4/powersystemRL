@@ -1,16 +1,20 @@
 T = 24; 
-folderPath = 'savedAgents\'; % change to your folder
+folderPath = 'savedAgents_1DPPG/'; % change to your folder
 agentFiles = dir(fullfile(folderPath, '*.mat'));
+agentResults_sorted =sortrows(agentResults2,"Reward","descend");
+agentFiles = agentResults_sorted.AgentName(1:100);
 numAgents = numel(agentFiles);
 agentResults = table('Size', [numAgents, 5], ...
     'VariableTypes', {'string','single','single','single','single'}, ...
     'VariableNames', {'AgentName', 'F1', 'F2', 'F3','Reward'});
 trained = 1;
+zero_action = zeros(33,1);
 %agent = load('saved_sessions\9bbestagent(full).mat').saved_agent;
 %agent = agent1_Trained
 for i = 1:numel(agentFiles)
     env = Copy_of_environment();
-    filePath = fullfile(folderPath, agentFiles(i).name);
+    %filePath = fullfile(folderPath, agentFiles(i).name);
+    filePath = fullfile(folderPath, agentFiles(i));
     observations = zeros(env.N_OBS, T+1);
     saved_agent = load(filePath).saved_agent;
     rewards = zeros(1, T);
@@ -80,7 +84,8 @@ for i = 1:numel(agentFiles)
         %f5 = env.EpisodeLogs{T}.f5;
 
         % Store the results in the table
-        agentResults.AgentName(i) = string(agentFiles(i).name);
+        agentResults.AgentName(i) = string(agentFiles(i));
+        % agentResults.AgentName(i) = string(agentFiles(i).name);
         agentResults.F1(i) = f1;
         agentResults.F2(i) = f2;
         agentResults.F3(i) = f3;
@@ -90,7 +95,8 @@ for i = 1:numel(agentFiles)
         agentResults.Reward(i) = sum(rewards);
     else
         % If criteria are not met, store NaN for the metrics
-        agentResults.AgentName(i) = string(agentFiles(i).name);
+        % agentResults.AgentName(i) = string(agentFiles(i).name);
+        agentResults.AgentName(i) = string(agentFiles(i));
         agentResults.F1(i) = NaN;
         agentResults.F2(i) = NaN;
         agentResults.F3(i) = NaN;
