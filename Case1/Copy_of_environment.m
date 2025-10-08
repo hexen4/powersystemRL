@@ -63,7 +63,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
     properties(Access = protected)
         % Termination Flag
         IsDone = false;  
-        training = 1;
+        training = 0;
     end
 
     methods              
@@ -77,7 +77,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             ActionInfo.Name = 'Microgrid Action';
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
-            this.PENALTY_FACTOR = 1.8;  
+            this.PENALTY_FACTOR = 1;  
             w1 = 1;
             w2 = 1;
             w3 = 10;
@@ -232,7 +232,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         IsDone = (this.time >= this.H);
         if IsDone
             if this.training == 1
-            this.reset();
+                this.reset();
             end
         end
 
@@ -418,9 +418,9 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             [budget_limit_penalty, budget] = this.budget_limit_constraint(incentive, curtailed, state(this.IDX_BUDGET_SUM),time);
             %% interval optimisation
             consumer_benefit_limit = max(0,consumer_benefit_penalty); %clip at -30 for maximum benefit and minimise 
-            penalties_max = time * (balance_penalty_max  + daily_curtailment_penalty...
+            penalties_max = (time/2) * (balance_penalty_max  + daily_curtailment_penalty...
                 + budget_limit_penalty + generation_penalty_max + ramp_penalty_max) + sum(consumer_benefit_limit) ;
-            penalties_min = time * (balance_penalty_min  + daily_curtailment_penalty...
+            penalties_min = (time/2) * (balance_penalty_min  + daily_curtailment_penalty...
                 + budget_limit_penalty + generation_penalty_min + ramp_penalty_min) + sum(consumer_benefit_limit);
             penalties = (penalties_max + penalties_min) / 2;
 
