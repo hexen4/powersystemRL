@@ -1,5 +1,3 @@
-
-env = Copy_of_environment();
 T = 24; 
 folderPath = 'savedAgents\'; % change to your folder
 agentFiles = dir(fullfile(folderPath, '*.mat'));
@@ -7,20 +5,20 @@ numAgents = numel(agentFiles);
 agentResults = table('Size', [numAgents, 5], ...
     'VariableTypes', {'string','single','single','single','single'}, ...
     'VariableNames', {'AgentName', 'F1', 'F2', 'F3','Reward'});
-observations = zeros(env.N_OBS, T+1);
-
-rewards = zeros(1, T);
-Action_scaled = zeros(33,T);
-Action = zeros(33,T);
-done_flags = false(1, T);
-zero_action = ones(33,1); 
 trained = 1;
 %agent = load('saved_sessions\9bbestagent(full).mat').saved_agent;
-%agent = agent1_Trained;
-observations(:,1) = env.State;  
+%agent = agent1_Trained
 for i = 1:numel(agentFiles)
+    env = Copy_of_environment();
     filePath = fullfile(folderPath, agentFiles(i).name);
+    observations = zeros(env.N_OBS, T+1);
     saved_agent = load(filePath).saved_agent;
+    rewards = zeros(1, T);
+    Action_scaled = zeros(33,T);
+    Action = zeros(33,T);
+    done_flags = false(1, T);
+    zero_action = ones(33,1); 
+    observations(:,1) = env.State;  
     for t = 1:T
         currentObs = observations(:, t);
         if trained == 1
@@ -75,9 +73,9 @@ for i = 1:numel(agentFiles)
         %[vmagmin(w), loc(w)] = min(env.EpisodeLogs{1,w}.vmag(1:33));
     end
     if all(env.EpisodeLogs{1, T}.Benefit>0) && env.EpisodeLogs{1, T}.daily_curtailment_penalty == 0 
-        f1 = env.w1*env.EpisodeLogs{1, w}.power_transfer_cost_culm;
-        f2 = env.w2*env.EpisodeLogs{1, w}.generator_cost_culm;        
-        f3 = env.w3*env.EpisodeLogs{1, w}.mgo_profit_culm;
+        f1 = env.EpisodeLogs{1, w}.power_transfer_cost_culm;
+        f2 = env.EpisodeLogs{1, w}.generator_cost_culm;        
+        f3 = env.EpisodeLogs{1, w}.mgo_profit_culm;
         %f4 = env.EpisodeLogs{T}.f4;
         %f5 = env.EpisodeLogs{T}.f5;
 
@@ -103,53 +101,53 @@ for i = 1:numel(agentFiles)
     end
 end
 
-elapsed_time = toc; % Stop timer and get elapsed time in seconds
-fprintf('Total elapsed time: %.4f seconds\n', elapsed_time);
-Vmag = zeros(66,24);
-curtailed = Action_scaled(1:32,:);
-incentives = Action_scaled(33,:);
-%% plotting penalties
-for i= 1:T
-    P_grid_max(i) = env.EpisodeLogs{1, i}.P_grid_max;
-    P_grid_min(i) = env.EpisodeLogs{1, i}.P_grid_min;
-    consumer_penalty(i) = env.EpisodeLogs{1, i}.consumer_benefit_penalty;
-    daily(i) = env.EpisodeLogs{1, i}.daily_curtailment_penalty;
-    mgo_profit_culm(i) =env.EpisodeLogs{1, i}.mgo_profit_culm;
-    mgo_profit_timestep(i) = env.EpisodeLogs{1, i}.mgo_profit;
-    ramp_penalty(i) = env.EpisodeLogs{1, i}.ramp_penalty;
-    generator(i) = env.EpisodeLogs{1, i}.generation_penalty;
-    f1scaled(i) =-env.w1*env.EpisodeLogs{1, i}.power_transfer_cost_culm;
-    f2scaled(i) =-env.w2*env.EpisodeLogs{1, i}.generator_cost_culm;
-    f3scaled(i) =env.w3*env.EpisodeLogs{1, i}.mgo_profit_culm;
-    f4scaled(i) =env.EpisodeLogs{1, i}.sum_penalties;
-    %Vmag(:,i) = env.EpisodeLogs{1, i}.vmagdata;
-    %action_penalties(i) = env.EpisodeLogs{1, i}.action_penalty;
-    %penalties_sum(i) = env.EpisodeLogs{1, i}.sum_penalties;
-end
-disp(sum(rewards))
-disp("f1:" + " " + env.EpisodeLogs{1, T}.power_transfer_cost_culm)
-disp("f2:" + " " + env.EpisodeLogs{1, T}.generator_cost_culm)
-disp("f3:" + " " + env.EpisodeLogs{1, T}.mgo_profit_culm)
-disp("f4:" + " " + env.EpisodeLogs{1, T}.sum_penalties)
-
-gen_power_max = sum(observations(1,:))/1e3;
-gen_power_min = sum(observations(2,:))/1e3;
-gen_power = (gen_power_max + gen_power_min) / 2;
-grid_power_max = sum(P_grid_max)/1e3;
-grid_power_min = sum(P_grid_min)/1e3;
-grid_power = (grid_power_max + grid_power_min) / 2;
-C1_curtail= sum(curtailed(1,:))/1000; %MWh/day
-C2_curtail = sum(curtailed(2,:))/1000; %MWh/day
-C3_curtail= sum(curtailed(3,:))/1000; %MWh/day
-C4_curtail = sum(curtailed(4,:))/1000; %MWh/day
-C5_curtail = sum(curtailed(5,:))/1000; %MWh/day
-C1_total = sum(observations(11,:))/1000;
-C2_total = sum(observations(12,:))/1000;
-C3_total = sum(observations(13,:))/1000;
-C4_total = sum(observations(14,:))/1000;
-C5_total = sum(observations(15,:))/1000;
-total_curt = C1_curtail + C2_curtail+ C3_curtail+C4_curtail + C5_curtail;
-disp("Total curtailed" + total_curt)
+% elapsed_time = toc; % Stop timer and get elapsed time in seconds
+% fprintf('Total elapsed time: %.4f seconds\n', elapsed_time);
+% Vmag = zeros(66,24);
+% curtailed = Action_scaled(1:32,:);
+% incentives = Action_scaled(33,:);
+% %% plotting penalties
+% for i= 1:T
+%     P_grid_max(i) = env.EpisodeLogs{1, i}.P_grid_max;
+%     P_grid_min(i) = env.EpisodeLogs{1, i}.P_grid_min;
+%     consumer_penalty(i) = env.EpisodeLogs{1, i}.consumer_benefit_penalty;
+%     daily(i) = env.EpisodeLogs{1, i}.daily_curtailment_penalty;
+%     mgo_profit_culm(i) =env.EpisodeLogs{1, i}.mgo_profit_culm;
+%     mgo_profit_timestep(i) = env.EpisodeLogs{1, i}.mgo_profit;
+%     ramp_penalty(i) = env.EpisodeLogs{1, i}.ramp_penalty;
+%     generator(i) = env.EpisodeLogs{1, i}.generation_penalty;
+%     f1scaled(i) =-env.w1*env.EpisodeLogs{1, i}.power_transfer_cost_culm;
+%     f2scaled(i) =-env.w2*env.EpisodeLogs{1, i}.generator_cost_culm;
+%     f3scaled(i) =env.w3*env.EpisodeLogs{1, i}.mgo_profit_culm;
+%     f4scaled(i) =env.EpisodeLogs{1, i}.sum_penalties;
+%     %Vmag(:,i) = env.EpisodeLogs{1, i}.vmagdata;
+%     %action_penalties(i) = env.EpisodeLogs{1, i}.action_penalty;
+%     %penalties_sum(i) = env.EpisodeLogs{1, i}.sum_penalties;
+% end
+% disp(sum(rewards))
+% disp("f1:" + " " + env.EpisodeLogs{1, T}.power_transfer_cost_culm)
+% disp("f2:" + " " + env.EpisodeLogs{1, T}.generator_cost_culm)
+% disp("f3:" + " " + env.EpisodeLogs{1, T}.mgo_profit_culm)
+% disp("f4:" + " " + env.EpisodeLogs{1, T}.sum_penalties)
+% 
+% gen_power_max = sum(observations(1,:))/1e3;
+% gen_power_min = sum(observations(2,:))/1e3;
+% gen_power = (gen_power_max + gen_power_min) / 2;
+% grid_power_max = sum(P_grid_max)/1e3;
+% grid_power_min = sum(P_grid_min)/1e3;
+% grid_power = (grid_power_max + grid_power_min) / 2;
+% C1_curtail= sum(curtailed(1,:))/1000; %MWh/day
+% C2_curtail = sum(curtailed(2,:))/1000; %MWh/day
+% C3_curtail= sum(curtailed(3,:))/1000; %MWh/day
+% C4_curtail = sum(curtailed(4,:))/1000; %MWh/day
+% C5_curtail = sum(curtailed(5,:))/1000; %MWh/day
+% C1_total = sum(observations(11,:))/1000;
+% C2_total = sum(observations(12,:))/1000;
+% C3_total = sum(observations(13,:))/1000;
+% C4_total = sum(observations(14,:))/1000;
+% C5_total = sum(observations(15,:))/1000;
+% total_curt = C1_curtail + C2_curtail+ C3_curtail+C4_curtail + C5_curtail;
+% disp("Total curtailed" + total_curt)
 
 %% actions
 % figure()
@@ -165,13 +163,13 @@ disp("Total curtailed" + total_curt)
 % legend("C1","C2","C3","C4","C5")
 % 
 %% plotting obj. function
-figure()
-plot(consumer_penalty)
-hold on
-plot(daily)
-hold on
-plot(mgo_profit_timestep)
-legend("consumer","daily","mgo_timestep")
+% figure()
+% plot(consumer_penalty)
+% hold on
+% plot(daily)
+% hold on
+% plot(mgo_profit_timestep)
+% legend("consumer","daily","mgo_timestep")
 
 
 %% verify action constraints true 

@@ -64,6 +64,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         % Termination Flag
         IsDone = false;  
         training = 0;
+        reconfiguration = 0;
     end
 
     methods              
@@ -226,10 +227,12 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         [Reward, logStruct,Observation] = ...
         this.calculate_reward(Action, Observation_old, this.time, this.State); %R(s',a, s)
         this.State = Observation;
-        
-        this.EpisodeLogs{end+1} = logStruct;        
+              
         %% Check if episode is done  
         IsDone = (this.time >= this.H);
+        if this.training == 0
+            this.EpisodeLogs{end+1} = logStruct;
+        end
         if IsDone
             if this.training == 1
                 this.reset();
