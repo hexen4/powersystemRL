@@ -229,18 +229,18 @@ function [LD,x]=reconfiguration_func(resi,comm,indu,pv,wt,curtailed,training)
     Loss(iter:end)=[];
     Loss=Loss.*Sbase*1000;
     
-    %tstop=toc(tstart);
+    % tstop=toc(tstart);
     
     %% ---RESULTS--- %%
     
      x=sort(TL(:,1));
     % if size(x,1) == 2
     % fprintf('Tie switch in final Configuration: %s \n',num2str(x'))
-    % end
-    %fprintf('The total active power loss in the final configuration of %d bus system is %f kW. \n\n', nbus, Loss(end))
+    % 
+    % fprintf('The total active power loss in the final configuration of %d bus system is %f kW. \n\n', nbus, Loss(end))
     %fprintf('The total computational time is %f sec. \n\n',tstop)
-    
-    
+
+end
     
     
     

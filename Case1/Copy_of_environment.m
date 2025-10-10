@@ -57,7 +57,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         f2;
         f1;
         minprice;
-
+        reconfiguration;
 
     end
     
@@ -65,7 +65,6 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         % Termination Flag
         IsDone = false;  
         training = 0;
-        reconfiguration = 1;
     end
 
     methods              
@@ -79,6 +78,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             ActionInfo.Name = 'Microgrid Action';
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
+            this.reconfiguration = 1;
             this.PENALTY_FACTOR = 1;  
             w1 = 1;
             w2 = 1;
@@ -228,7 +228,9 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             [Vmag_max, theta_max, Pcalc_max, Qcalc_max]= NR_zero_PQVdelta(BD_max,Yb_max,nbus); %POWER FLOW
             [Yb_min] = Ybus(LD_min,nbr,nbus);
             [Vmag_min, theta_min, Pcalc_min, Qcalc_min]= NR_zero_PQVdelta(BD_min,Yb_min,nbus); 
-            
+            % if any(abs(1-Vmag_min)> 0.05) || any(abs(1-Vmag_max)> 0.05)
+            %     display(time)
+            % end
             %% Initialize next state (s_{t+1})
             next_state = zeros(this.N_OBS, 1);
             next_state(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(BD_max(12,7) + Pcalc_max(12,1)); %pgen to match prev time

@@ -1,4 +1,4 @@
-function agentResults = evaluateAgents()
+function agentResults = evaluateAgents(reconfiguration)
     % evaluateAgents - Evaluates all agents saved in a folder and returns a results table.
     %
     % This function runs through all saved agents, evaluates them in the
@@ -8,51 +8,74 @@ function agentResults = evaluateAgents()
     % Output:
     %   agentResults : table containing AgentName, F1, F2, F3, Reward
 
-    folderPath = 'savedAgents\';
+    folderPath = 'savedAgents_1DPPG\';
     T = 24; % number of timesteps per episode
-
+    reconfig_wo = load("resultsnew\1_DPPG_agents.mat").agentResults;
     agentFiles = dir(fullfile(folderPath, '*.mat'));
     numAgents = numel(agentFiles);
     agentResults = table('Size', [numAgents, 5], ...
         'VariableTypes', {'string','single','single','single','single'}, ...
         'VariableNames', {'AgentName', 'F1', 'F2', 'F3', 'Reward'});
 
-    for i = 1:numAgents
-        env = Copy_of_environment();
-        filePath = fullfile(folderPath, agentFiles(i).name);
-        observations = zeros(env.N_OBS, T+1);
-        saved_agent = load(filePath).saved_agent;
-        rewards = zeros(1, T);
-        Action_scaled = zeros(33, T);
-        Action = zeros(33, T);
-        zero_action = ones(33,1); 
-        observations(:,1) = env.State;  
+   for i = 1:numAgents
+    env = Copy_of_environment();
+    if reconfiguration == 1
+        env.reconfiguration = 1;
+    else
+        env.reconfiguration = 0;
+    end
 
-        for t = 1:T
-            currentObs = observations(:, t);
-            action = cell2mat(getAction(saved_agent, currentObs));
+    filePath = fullfile(folderPath, agentFiles(i).name);
+    observations = zeros(env.N_OBS, T+1);
+    saved_agent = load(filePath).saved_agent;
+    saved_agent.UseExplorationPolicy = 0;
+    rewards = zeros(1, T);
+    Action_scaled = zeros(33, T);
+    Action = zeros(33, T);
+    zero_action = ones(33,1);
+    observations(:,1) = env.State;
 
-            % Scaled actions
-            min_incentive = currentObs(env.IDX_MARKET_MINPRICE)*0.3;
-            max_incentive = currentObs(env.IDX_MARKET_MINPRICE);
-            max_action = [0.6*currentObs(env.IDX_PROSUMER_PKW); max_incentive];
-            min_action = [zeros(32,1); min_incentive];
-            action_scaled = env.scale_action(action, max_action, min_action);
-            Action_scaled(:,t) = action_scaled;
-            Action(:,t) = action;
+    for t = 1:T
+        currentObs = observations(:, t);
+        action = cell2mat(getAction(saved_agent, currentObs));
 
-            [obs, reward, isDone] = env.step(action);
-            observations(:, t+1) = obs;
-            rewards(t) = reward;
+        % Scaled actions
+        min_incentive = currentObs(env.IDX_MARKET_MINPRICE)*0.3;
+        max_incentive = currentObs(env.IDX_MARKET_MINPRICE);
+        max_action = [0.6*currentObs(env.IDX_PROSUMER_PKW); max_incentive];
+        min_action = [zeros(32,1); min_incentive];
+        action_scaled = env.scale_action(action, max_action, min_action);
+        Action_scaled(:,t) = action_scaled;
+        Action(:,t) = action;
+
+        [obs, reward, isDone] = env.step(action);
+        observations(:, t+1) = obs;
+        rewards(t) = reward;
+
+    end 
+    % Guard against empty EpisodeLogs or shorter episodes
+    if ~isempty(env.EpisodeLogs)
+        lastLogIdx = min(T, size(env.EpisodeLogs,2));
+        % protect against empty entries
+        if ~isempty(env.EpisodeLogs{1, lastLogIdx})
+            f1 = env.EpisodeLogs{1, lastLogIdx}.power_transfer_cost_culm;
+            f2 = env.EpisodeLogs{1, lastLogIdx}.generator_cost_culm;
+            f3 = env.EpisodeLogs{1, lastLogIdx}.mgo_profit_culm;
+            finalBenefit = env.EpisodeLogs{1, lastLogIdx}.Benefit;
+            finalDailyCurt = env.EpisodeLogs{1, lastLogIdx}.daily_curtailment_penalty;
+        else
+            f1 = NaN; f2 = NaN; f3 = NaN;
+            finalBenefit = NaN; finalDailyCurt = NaN;
         end
+    else
+        f1 = NaN; f2 = NaN; f3 = NaN;
+        finalBenefit = NaN; finalDailyCurt = NaN;
+    end
 
-        % Extract objective function values from logs (final step)
-        f1 = env.EpisodeLogs{1, T}.power_transfer_cost_culm;
-        f2 = env.EpisodeLogs{1, T}.generator_cost_culm;        
-        f3 = env.EpisodeLogs{1, T}.mgo_profit_culm;
-
+    % --- decide what to save / delete based on reconfiguration flag
+    if reconfiguration == 0
         % Check completion condition
-        if all(env.EpisodeLogs{1, T}.Benefit > 0) && env.EpisodeLogs{1, T}.daily_curtailment_penalty == 0
+        if all(finalBenefit > 0) && finalDailyCurt == 0
             agentResults.AgentName(i) = string(agentFiles(i).name);
             agentResults.F1(i) = f1;
             agentResults.F2(i) = f2;
@@ -63,12 +86,31 @@ function agentResults = evaluateAgents()
             agentResults.AgentName(i) = string(agentFiles(i).name);
             agentResults{i, 2:end} = NaN;
 
-            % Delete the corresponding .mat file
             fprintf('Deleting agent: %s (failed completion condition)\n', agentFiles(i).name);
             delete(filePath);
         end
-    end
-end
+    else
+        % reconfiguration == 1: compare to non-reconfig baseline reconfig_wo
+        % safe lookup for matching AgentName in reconfig_wo
+        matchIdx = find(strcmp(reconfig_wo.AgentName, string(agentFiles(i).name)), 1);
+        baselineReward = NaN;
+        if ~isempty(matchIdx)
+            baselineReward = reconfig_wo.Reward(matchIdx);
+        end
 
+        if ~isnan(baselineReward) && sum(rewards) > baselineReward
+            if all(finalBenefit > 0) && finalDailyCurt == 0
+                agentResults.AgentName(i) = string(agentFiles(i).name);
+                agentResults.F1(i) = f1;
+                agentResults.F2(i) = f2;
+                agentResults.F3(i) = f3;
+                agentResults.Reward(i) = sum(rewards);
+            end
+        end
     end
-end
+
+    end 
+
+
+
+   
