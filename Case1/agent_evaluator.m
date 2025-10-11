@@ -8,7 +8,7 @@ T = 24;
     %     'VariableTypes', {'string','single','single','single','single'}, ...
     %     'VariableNames', {'AgentName', 'F1', 'F2', 'F3','Reward'});
 trained = 1;
-%agent = load('saved_sessions\9bbestagent(full).mat').saved_agent;
+saved_agent = load('Case1\savedAgents_1DPPG\Agent19213.mat').saved_agent;
 % for i = 1:numel(agentFiles)
 env = Copy_of_environment();
     %filePath = fullfile(folderPath, agentFiles(i).name);
@@ -59,6 +59,7 @@ incentives = Action_scaled(33,:);
 for w= 1:24
     P_grid_max(w) = env.EpisodeLogs{1, w}.P_grid_max;
     P_grid_min(w) = env.EpisodeLogs{1, w}.P_grid_min;
+    generator_power(w) = env.EpisodeLogs{1, w}.generation_max;
     consumer_penalty(w) = env.EpisodeLogs{1, w}.consumer_benefit_penalty;
     daily(w) = env.EpisodeLogs{1, w}.daily_curtailment_penalty;
     %VDI(w) =env.EpisodeLogs{1, w}.VDI_avg;

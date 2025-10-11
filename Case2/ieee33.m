@@ -1,11 +1,14 @@
-function [BD,LD,CPKW_before_curtailment,totalload_before_action]=ieee33(load_percent,pv,wt,curtailed,bat_powers,LD_new)
-customer_ids = [9,22,14,30,25] ;
+function [BD,LD,CPKW_before_curtailment,totalload_before_action]=ieee33(resi,comm,indu,pv,wt,curtailed,bat_powers,LD_new)
+customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
+customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
+customer_ids_industrial =[7,8,9,16,17,23,26,28];
+all_ids = [customer_ids_residential,customer_ids_commercial,customer_ids_industrial];
 Vbase=11; %%---Base Voltage in kV---%%
 Sbase=10; %%---Base Power in MVA---%%
 Zbase=Vbase*Vbase/Sbase; %%---Base impedance in ohms---%%
 
 %% ----Line Data (or Branch data) of the system----- %%
-if nargin == 6
+if nargin == 8
    LD = LD_new;
 else
     %%--- Line   From    To     R          X     Line Charging  Tap    Angle----%% 
@@ -89,8 +92,11 @@ BD = [ 1      4     1.0      0       0      0        0       0       0        0
    
    
 
-BD(:,7:8) = BD(:,7:8)*load_percent/100; %apply load percent
-CPKW_before_curtailment = BD(customer_ids,7); %output for state before scaling
+BD(customer_ids_residential,7:8) = BD(customer_ids_residential,7:8)*resi; %apply load percent
+BD(customer_ids_commercial,7:8) = BD(customer_ids_commercial,7:8)*comm; %apply load percent
+BD(customer_ids_industrial,7:8) = BD(customer_ids_industrial,7:8)*indu; %apply load percent
+
+CPKW_before_curtailment = BD(all_ids,7); %output for state before scaling
 totalload_before_action = sum(BD(:,7));
 batteryRows = [21, 26, 10, 23];
 for i = 1:numel(batteryRows)
@@ -105,7 +111,7 @@ for i = 1:numel(batteryRows)
         BD(row, 7) = BD(row, 7) + batValue;  % add to Pl column
     end
 end
-BD(customer_ids,7) = BD(customer_ids,7) - curtailed; %apply curtailment
+BD(all_ids,7) = BD(all_ids,7) - curtailed; %apply curtailment
 BD(1,5) = sum(BD(:,7))-sum(BD(:,5)); %calculate grid transfer
 BD(1,6)=  sum(BD(:,8));
 BD(:,5:8)=BD(:,5:8)/(1000*Sbase); %%---Conversion of P and Q in pu quantity---%%

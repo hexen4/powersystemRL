@@ -1,5 +1,8 @@
-function [BD,LD,TL,rowsToRemove]=disaster_model(load_percent,pv,wt, curtailed,bat_powers,disaster,training)
-customer_ids = [9,22,14,30,25] ;
+function [BD,LD,TL,rowsToRemove]=disaster_model(resi,comm,indu,pv,wt, curtailed,bat_powers,disaster,training)
+customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
+customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
+customer_ids_industrial =[7,8,9,16,17,23,26,28];
+all_ids = [customer_ids_residential,customer_ids_commercial,customer_ids_industrial];
 Vbase=11; %%---Base Voltage in kV---%%
 Sbase=10; %%---Base Power in MVA---%%
 Zbase=Vbase*Vbase/Sbase; %%---Base impedance in ohms---%%
@@ -94,7 +97,10 @@ BD = [ 1      3     1.0      0       0      0        0       0       0        0 
    
 
 
-BD(:,7:8) = BD(:,7:8)*load_percent/100; %apply load percent
+BD(customer_ids_residential,7:8) = BD(customer_ids_residential,7:8)*resi; %apply load percent
+BD(customer_ids_commercial,7:8) = BD(customer_ids_commercial,7:8)*comm; %apply load percent
+BD(customer_ids_industrial,7:8) = BD(customer_ids_industrial,7:8)*indu; %apply load percent
+
 batteryRows = [21, 26, 10, 23];
 for i = 1:numel(batteryRows)
     row = batteryRows(i);
@@ -108,7 +114,7 @@ for i = 1:numel(batteryRows)
         BD(row, 7) = BD(row, 7) + batValue;  % add to Pl column
     end
 end
-BD(customer_ids,7) = BD(customer_ids,7) - curtailed; %apply curtailment
+BD(all_ids,7) = BD(all_ids,7) - curtailed; %apply curtailment
 % BD(1,5) = sum(BD(:,7))-wt-pv ; %calculate grid transfer
 % BD(1,6)=  BD(1,5)*tan(acos(0.85));
 %% disater removing line
@@ -120,7 +126,7 @@ if disaster ~= 0
     end
     
     possibleLines = [24,9,6,21,32]; %taken from EC paper %no 13, 
-    %possibleLines = [22,25,8,14,18];
+    %possibleLines = [22,25,8,14,18,3,8,31];
     rowsToRemove = randsample(possibleLines, numToRemove, false);
     LD(rowsToRemove, :) = [];
     LD(:,1) = (1:size(LD, 1))';

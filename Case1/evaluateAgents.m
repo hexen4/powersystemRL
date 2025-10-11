@@ -8,9 +8,9 @@ function agentResults = evaluateAgents(reconfiguration)
     % Output:
     %   agentResults : table containing AgentName, F1, F2, F3, Reward
 
-    folderPath = 'savedAgents_1DPPG\';
+    folderPath = 'Case1\savedAgents_1DPPG\';
     T = 24; % number of timesteps per episode
-    reconfig_wo = load("resultsnew\1_DPPG_agents.mat").agentResults;
+    reconfig_wo = load("Case1\resultsnew\1_DPPG_agents.mat").agentResults;
     agentFiles = dir(fullfile(folderPath, '*.mat'));
     numAgents = numel(agentFiles);
     agentResults = table('Size', [numAgents, 5], ...

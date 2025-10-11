@@ -58,13 +58,13 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         f1;
         minprice;
         reconfiguration;
-
+        training 
     end
     
     properties(Access = protected)
         % Termination Flag
         IsDone = false;  
-        training = 0;
+        
     end
 
     methods              
@@ -138,7 +138,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.State = zeros(this.N_OBS,1);
             this.init_obs = zeros(this.N_OBS,1);
     
-
+            this.training = 1;
 
             %% cache state t = 1
             this.Sbase = 10; %MVA

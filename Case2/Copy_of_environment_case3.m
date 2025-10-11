@@ -20,13 +20,18 @@ properties
     %% constants / data
     H; %hours in day
     market_prices; %$/MWh
-    load_percent; 
+    load_resi;
+    load_comm;
+    load_indu;
     State; 
     wt_KW_max; %max. predicted wind power
     pv_KW_max;
     wt_KW_min;
     pv_KW_min;
-    customer_ids; %bus ids of customers
+    customer_ids_residential;
+    customer_ids_commercial;
+    customer_ids_industrial;
+    n_cust;
     Sbase;
     Vbase;
     Zbase;
@@ -76,6 +81,7 @@ properties
     f2;
     f1;
     minprice;
+    discomforts;
     %% battery and HILF constants
     SOC_min;
     Pbatmax; 
@@ -93,24 +99,23 @@ end
 methods              
     function this = Copy_of_environment_case3()
         %% compatability with RL 
-        ObservationInfo = rlNumericSpec([47 1], ...
+        ObservationInfo = rlNumericSpec([182 1], ...
             'LowerLimit', -inf, 'UpperLimit', inf);
         ObservationInfo.Name = 'Microgrid State';
-        ActionInfo = rlNumericSpec([10 1], ...
+        ActionInfo = rlNumericSpec([37 1], ...
             'LowerLimit', 0 , 'UpperLimit', 1); %important, action output between 0 and 1
         ActionInfo.Name = 'Microgrid Action';
         this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo); % Call Base Class Constructor
-        this.PENALTY_FACTOR = 10;  
+        this.PENALTY_FACTOR = 1;  
         w1 = 5;
         w2 = 0.5;
         w3 = 20;
-        w4 = 0.1;
-        w5 = 1;
-        this.w1 = w1/(w1+w2+w3+w4+w5);
-        this.w2 = w2/(w1+w2+w3+w4+w5);
-        this.w3 = w3/(w1+w2+w3+w4+w5);
-        this.w4 = w4/(w1+w2+w3+w4+w5);
-        this.w5 = w5/(w1+w2+w3+w4+w5);
+        w4 = 1;
+        this.w1 = w1/(w1+w2+w3+w4);
+        this.n_cust = 32;
+        this.w2 = w2/(w1+w2+w3+w4);
+        this.w3 = w3/(w1+w2+w3+w4);
+        this.w4 = w4/(w1+w2+w3+w4);
         this.H = 24;
         this.EpisodeLogs = {};   
         this.AllLogs = {};       
@@ -148,46 +153,60 @@ methods
         this.IDX_TOTAL_LOAD               = 8;
         this.IDX_PREV_GENPOWER_MAX        = 9;
         this.IDX_PREV_GENPOWER_MIN        = 10;
-        this.IDX_PROSUMER_PKW             = 11:15;   % 5 consumers
-        this.IDX_PROSUMER_SUM             = 16:20;   
-        this.IDX_CURTAILED_SUM            = 21:25;   
-        this.IDX_BENEFIT_SUM              = 26:30;   
-        this.IDX_BUDGET_SUM              = 31; 
-        this.IDX_MARKET_MINPRICE = 32;
-        this.IDX_DISCOMFORTS = 33:37;
-        this.IDX_TIME = 38;
-        this.IDX_SOC = 39:42;
-        this.IDX_PGRID_MAX = 43;
-        this.IDX_PGRID_MIN = 44;
-        this.IDX_BROKEN = 45:47;
-        this.event_time = [12:15 19:22];
+        this.IDX_PROSUMER_PKW             = 11:42;   % 5 consumers
+        this.IDX_PROSUMER_SUM             = 43:74;   % t
+        this.IDX_CURTAILED_SUM            = 75:106;   % t
+        this.IDX_BENEFIT_SUM              = 107:138;   % t
+        this.IDX_BUDGET_SUM              = 139; % t
+        this.IDX_MARKET_MINPRICE = 140;
+        this.IDX_DISCOMFORTS = 141:172;
+        this.IDX_TIME = 173;
+        this.IDX_SOC = 174:177;
+        this.IDX_PGRID_MAX = 178;
+        this.IDX_PGRID_MIN = 179;
+        this.IDX_BROKEN = 180:182;
+        this.event_time = [7:10 12:15 19:22];
+        %this.event_time = [];
         this.N_OBS = this.IDX_BROKEN(end);
         %% read tables and variable initialisation
         this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
-        this.load_percent = readtable("data/Copy_of_solar_wind_data.csv").hourly_load;  
+        this.load_resi = readtable("data/Copy_of_solar_wind_data.csv").residential;  
+        this.load_comm = readtable("data/Copy_of_solar_wind_data.csv").commercial;  
+        this.load_indu = readtable("data/Copy_of_solar_wind_data.csv").industrial;  
         this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
         this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
         this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
         this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
-        this.customer_ids = [9,22,14,30,25] ; 
         this.State = zeros(this.N_OBS,1);
         this.init_obs = zeros(this.N_OBS,1);
         this.Sbase = 10; %MVA
         this.Zbase = 121/10;
-        this.ref_f1 = 4413.7418;
-        this.ref_f2 =  625.9536;
+        this.ref_f1 = 2.8793774e+03; %% TODO CHANGE
+        this.ref_f2 =  5.0488446e+02; %% TODO CHANGE
         this.LEI_MAX = 0;
         this.LEI_MIN = 0;
-        this.ref_f3  = 368.0635;
-        this.ref_voltage = load("savedconstants\Vmag_reconfig.mat").vmag;
+        this.ref_f3  = 5.9185754e+02; %% TODO CHANGE
+        this.ref_voltage = load("savedconstants_OLD\Vmag_reconfig.mat").vmag; %% TODO CHANGE
+        this.customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
+        this.customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
+        this.customer_ids_industrial =[7,8,9,16,17,23,26,28];
+        this.discomforts =[repmat(0.33, 1, numel(this.customer_ids_residential)), ...
+        repmat(0.66, 1, numel(this.customer_ids_commercial)), ...
+        repmat(1.00, 1, numel(this.customer_ids_industrial))];
         %% cache state t = 1 with a = 0
 
         %NR with BIBC reconfiguration to find minimum power loss
-        [LD_new,~] = reconfiguration_func(this.load_percent(1), this.pv_KW_max(1), ...
-            this.wt_KW_max(1),zeros(5,1),zeros(4,1),0,this.training);
-        LD_new(:,4:5)=LD_new(:,4:5)*this.Zbase;
-        [init_BD_max,init_LD_max,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_percent(1), ...
-            this.pv_KW_max(1),this.wt_KW_max(1),zeros(5,1),zeros(4,1),LD_new);
+        [LD_new_max,~] = reconfiguration_func(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1), this.pv_KW_max(1), ...
+                this.wt_KW_max(1),zeros(this.n_cust,1),zeros(4,1),0,this.training);
+        [LD_new_min,~] = reconfiguration_func(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1), ...
+                this.wt_KW_min(1),zeros(this.n_cust,1),zeros(4,1),0,this.training);
+
+        LD_new_max(:,4:5)=LD_new_max(:,4:5)*this.Zbase;
+        LD_new_min(:,4:5)=LD_new_min(:,4:5)*this.Zbase;
+        [init_BD_max,init_LD_max,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1),this.pv_KW_max(1),this.wt_KW_max(1),zeros(this.n_cust,1),zeros(4,1),LD_new_max);
         
         nbr=size(init_LD_max,1);
         nbus=size(init_BD_max,1);
@@ -195,8 +214,8 @@ methods
         %calcualte generator power (losses) PQVD
         [init_Vmag_max, init_theta_max, init_Pcalc_max, init_Qcalc_max]= NR_zero_PQVdelta(init_BD_max,init_Yb_max,nbus); 
 
-        [init_BD_min,init_LD_min,~,~]= ieee33(this.load_percent(1), this.pv_KW_min(1),this.wt_KW_min(1), ...
-            zeros(5,1),zeros(4,1),LD_new);
+        [init_BD_min,init_LD_min,~,~]= ieee33(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1),this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1),zeros(4,1),LD_new_min);
         [init_Yb_min] = Ybus(init_LD_min,nbr,nbus);
         [init_Vmag_min, init_theta_min, init_Pcalc_min, init_Qcalc_min]= NR_zero_PQVdelta(init_BD_min,init_Yb_min,nbus); 
         %% create state
@@ -214,9 +233,9 @@ methods
         this.init_obs(this.IDX_TIME) = 1;
         this.init_obs(this.IDX_PREV_GENPOWER_MAX) = 0;
         this.init_obs(this.IDX_PREV_GENPOWER_MIN) = 0;
-        this.init_obs(this.IDX_CURTAILED_SUM) = zeros(5,1);
-        this.init_obs(this.IDX_BENEFIT_SUM) = zeros(5,1);
-        this.init_obs(this.IDX_DISCOMFORTS) = zeros(5,1); 
+        this.init_obs(this.IDX_CURTAILED_SUM) = zeros(this.n_cust,1);
+        this.init_obs(this.IDX_BENEFIT_SUM) = zeros(this.n_cust,1);
+        this.init_obs(this.IDX_DISCOMFORTS) = zeros(this.n_cust,1); 
         this.init_obs(this.IDX_BUDGET_SUM) = 0;
         this.init_obs(this.IDX_SOC) = ones(4,1) * this.start_SOC; %kwh
         %others are 0 either due to 0 curtailment or no prev gen power
@@ -228,25 +247,31 @@ methods
 
     function [next_state,resilience_metrics,Vmagdata,x] = update_state(this, State, Action, time)
         %%% whole point of NR is to calculate line losses and set pgen
-        curtailed = Action(1:5);
-        bat_powers = Action(7:end);
+        curtailed = Action(1:32);
+        bat_powers = Action(34:end);
         %% perform reconfiguration without distaster
-        [LD_nodisaster_max,~] = reconfiguration_func(this.load_percent(time-1), this.pv_KW_max(time-1), ...
-            this.wt_KW_max(time-1),zeros(5,1),zeros(4,1),0,this.training);
-        [LD_nodisaster_min,~] = reconfiguration_func(this.load_percent(time-1), this.pv_KW_min(time-1), ...
-            this.wt_KW_min(time-1),zeros(5,1),zeros(4,1),0,this.training);
+        [LD_nodisaster_max,~] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1), ...
+                this.wt_KW_max(time-1),zeros(this.n_cust,1),zeros(4,1),0,this.training);
+        [LD_nodisaster_min,~] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1), ...
+                this.wt_KW_min(time-1),zeros(this.n_cust,1),zeros(4,1),0,this.training);
         
         %% disaster modelling
         if ismember(time, this.event_time) %if else hilf event -> flag != 0 => disaster
-        [LD_disaster_min,rowsToRemove_min] = reconfiguration_func(this.load_percent(time-1), this.pv_KW_min(time-1), ...
-            this.wt_KW_min(time-1),curtailed,bat_powers,time,this.training);
-        [LD_disaster_max,rowsToRemove_max,x] = reconfiguration_func(this.load_percent(time-1), this.pv_KW_max(time-1), ...
-            this.wt_KW_max(time-1),curtailed,bat_powers,time,this.training);
+        [LD_disaster_min,rowsToRemove_min] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1), ...
+                this.wt_KW_min(time-1),curtailed,bat_powers,time,this.training);
+        [LD_disaster_max,rowsToRemove_max,x] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1), ...
+                this.wt_KW_max(time-1),curtailed,bat_powers,time,this.training);
         else
-        [LD_disaster_min,rowsToRemove_min] = reconfiguration_func(this.load_percent(time-1), this.pv_KW_min(time-1), ...
-            this.wt_KW_min(time-1),curtailed,bat_powers,0,this.training);
-        [LD_disaster_max,rowsToRemove_max,x] = reconfiguration_func(this.load_percent(time-1), this.pv_KW_max(time-1), ...
-            this.wt_KW_max(time-1),curtailed,bat_powers,0,this.training);
+        [LD_disaster_min,rowsToRemove_min] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1), ...
+                this.wt_KW_min(time-1),curtailed,bat_powers,0,this.training);
+        [LD_disaster_max,rowsToRemove_max,x] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1), ...
+                this.wt_KW_max(time-1),curtailed,bat_powers,0,this.training);
         end
         LD_disaster_max(:,4:5)=LD_disaster_max(:,4:5)*this.Zbase;
         LD_nodisaster_max(:,4:5)=LD_nodisaster_max(:,4:5)*this.Zbase;
@@ -254,24 +279,32 @@ methods
         LD_disaster_min(:,4:5)=LD_disaster_min(:,4:5)*this.Zbase;
 
         %% max values power flow 
-        [BD_maxnodisaster,LD_maxnodisaster,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_percent(time-1), ...
-            this.pv_KW_max(time-1),this.wt_KW_max(time-1),zeros(5,1),zeros(4,1),LD_nodisaster_max);
+        [BD_maxnodisaster,LD_maxnodisaster,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(time-1), ...
+         this.load_comm(time-1),this.load_indu(time-1),this.pv_KW_max(time-1),this.wt_KW_max(time-1), ...
+         zeros(this.n_cust,1),zeros(4,1),LD_nodisaster_max);
+
         nbr=size(LD_maxnodisaster,1);
         nbus=size(BD_maxnodisaster,1);
         [Yb_max] = Ybus(LD_maxnodisaster,nbr,nbus);
         [Vmag_max_nodisaster, theta_max, Pcalc_max_nodisaster, Qcalc_max]= NR_zero_PQVdelta(BD_maxnodisaster,Yb_max,nbus); %POWER FLOW
-        [BD_maxdisaster,LD_maxdisaster,~,~]= ieee33(this.load_percent(time-1), ...
-            this.pv_KW_max(time-1),this.wt_KW_max(time-1),curtailed,bat_powers,LD_disaster_max);
+        
+        [BD_maxdisaster,LD_maxdisaster,~,~]= ieee33(this.load_resi(time-1), ...
+         this.load_comm(time-1),this.load_indu(time-1), ...
+         this.pv_KW_max(time-1),this.wt_KW_max(time-1),curtailed,bat_powers,LD_disaster_max);
+
         [Yb_maxdisaster] = Ybus(LD_maxdisaster,nbr,nbus);
         [Vmag_max_disaster, theta_max_disaster, Pcalc_max_disaster, Qcalc_max_disaster,P_GRID_MAX]= gen_cap(this,BD_maxdisaster, ...
             Yb_maxdisaster,nbus,this.time,this.State(this.IDX_POWER_GEN_MAX)); %power flow with gen_cap consideration. 
         % extra imported from grid
         %% min values power flow 
-        [BD_minnodisaster,LD_minnodisaster,~,~]= ieee33(this.load_percent(time-1), this.pv_KW_min(time-1), ...
-            this.wt_KW_min(time-1),zeros(5,1),zeros(4,1),LD_nodisaster_min);
+        [BD_minnodisaster,LD_minnodisaster,~,~]= ieee33(this.load_resi(time-1), ...
+         this.load_comm(time-1),this.load_indu(time-1),this.pv_KW_min(time-1),this.wt_KW_min(time-1), ...
+         zeros(this.n_cust,1),zeros(4,1),LD_nodisaster_min);
+
         [Yb_minnodisaster] = Ybus(LD_minnodisaster,nbr,nbus);
         [Vmag_min_nodisaster, theta_min, Pcalc_min_nodisaster, Qcalc_min]= NR_zero_PQVdelta(BD_minnodisaster,Yb_minnodisaster,nbus);      
-        [BD_mindisaster,LD_mindisaster,~,~]= ieee33(this.load_percent(time-1), this.pv_KW_min(time-1),...
+        [BD_mindisaster,LD_mindisaster,~,~]= ieee33(this.load_resi(time-1), ...
+         this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1),...
         this.wt_KW_min(time-1),curtailed,bat_powers,LD_disaster_min);
         [Yb_mindisaster] = Ybus(LD_mindisaster,nbr,nbus);
         [Vmag_min_disaster, theta_min_disaster, Pcalc_min_disaster, Qcalc_min_disaster,P_GRID_MIN]= gen_cap(this, ...
@@ -324,7 +357,7 @@ methods
     bat_min = max(-this.Pbatmax*ones(4,1),(this.SOC_min - this.State(this.IDX_SOC))*0.95);
     bat_max=  min(this.Pbatmax*ones(4,1),(this.SOC_max - this.State(this.IDX_SOC))/0.95);
     max_action = [0.6.*this.State(this.IDX_PROSUMER_PKW); max_incentive; bat_max]; %constraint 4
-    min_action = [zeros(5,1);min_incentive; bat_min];
+    min_action = [zeros(this.n_cust,1);min_incentive; bat_min];
     Scaled_Action = this.scale_action(Action,max_action,min_action);
 
     %% Update state 
@@ -432,8 +465,7 @@ methods
     %     notifyEnvUpdated(this);
     % end
     function discomforts = calculate_discomforts(this,xjh,pjh)
-         CONSUMER_BETA = [1,2,2,3,3];
-         discomforts = exp(CONSUMER_BETA' .* (xjh ./ pjh)) - 1;
+             discomforts = exp(this.discomforts' .* (xjh ./ pjh)) - 1;
     end
     function cost = cal_costgen(this,power_gen)
         % Calculate the generation cost based on power generation.
@@ -519,7 +551,7 @@ methods
         % end
     end
     function [penalty, benefit_diff,violations] = indivdiual_consumer_benefit(this, incentive, curtailed, discomforts, prev_benefit, time)
-        epsilon = [1; 0.9; 0.7; 0.6; 0.4];
+        epsilon = this.discomforts';
         curtailed = curtailed ./ 1000;
         
         % Compute benefit difference
@@ -548,7 +580,7 @@ methods
     function [penalty, total_cost] = budget_limit_constraint(this,incentive, curtailed, prev_budget,time)
         % Check that the total cost does not exceed the specified budget.
         curtailed = curtailed ./ 1000;
-        budget = 500;
+        budget = 3200;
         total_cost = sum(incentive .* curtailed) + prev_budget;
         if total_cost > budget
 
@@ -559,24 +591,24 @@ methods
         end
     end
 
-    function [penalty] = constraint_penalty(this, action, lower_limit, upper_limit)
-        % Initialize penalty array
-        penalty = zeros(size(action));
-    
-        % Apply penalty for exceeding upper limit
-        penalty(action > upper_limit) = (action(action > upper_limit) - upper_limit(action > upper_limit)).^2 * this.PENALTY_FACTOR;
-    
-        % Apply penalty for violating lower limit
-        penalty(action < lower_limit) = (lower_limit(action < lower_limit) - action(action < lower_limit)).^2 * this.PENALTY_FACTOR;
-    
-
-    end
+    % function [penalty] = constraint_penalty(this, action, lower_limit, upper_limit)
+    %     % Initialize penalty array
+    %     penalty = zeros(size(action));
+    % 
+    %     % Apply penalty for exceeding upper limit
+    %     penalty(action > upper_limit) = (action(action > upper_limit) - upper_limit(action > upper_limit)).^2 * this.PENALTY_FACTOR;
+    % 
+    %     % Apply penalty for violating lower limit
+    %     penalty(action < lower_limit) = (lower_limit(action < lower_limit) - action(action < lower_limit)).^2 * this.PENALTY_FACTOR;
+    % 
+    % 
+    % end
 
     function [reward,logStruct, Observation_updated] = calculate_reward(this, scaled_action, next_state, time, state,resilience_metric,Vmagdata,x)
         %% actions
-        curtailed = scaled_action(1:5);
-        incentive = scaled_action(6);
-        bat_powers = scaled_action(7:end);
+        curtailed = scaled_action(1:32);
+        incentive = scaled_action(33);
+        bat_powers = scaled_action(34:end);
         %% constants 
         P_grid_max = state(this.IDX_PGRID_MAX);
         P_grid_min = state(this.IDX_PGRID_MIN);
@@ -629,10 +661,10 @@ methods
         % Constraint 9
         [budget_limit_penalty, budget] = this.budget_limit_constraint(incentive, curtailed, state(this.IDX_BUDGET_SUM),time);
 
-        % Action constraint (always adhered to)
-        lower_limit = [zeros(5,1);0.3*state(this.IDX_MARKET_MINPRICE);ones(4,1)*this.SOC_min];
-        upper_limit = [0.6.*state(this.IDX_PROSUMER_PKW);state(this.IDX_MARKET_MINPRICE);ones(4,1)*this.SOC_max];
-        [action_penalty] = this.constraint_penalty([curtailed;incentive;state(this.IDX_SOC)], lower_limit,upper_limit);
+        % % Action constraint (always adhered to)
+        % lower_limit = [zeros(5,1);0.3*state(this.IDX_MARKET_MINPRICE);ones(4,1)*this.SOC_min];
+        % upper_limit = [0.6.*state(this.IDX_PROSUMER_PKW);state(this.IDX_MARKET_MINPRICE);ones(4,1)*this.SOC_max];
+        % [action_penalty] = this.constraint_penalty([curtailed;incentive;state(this.IDX_SOC)], lower_limit,upper_limit);
         
         % resilience metric
         F5_max = -(resilience_metric(1) + resilience_metric(3));
@@ -640,13 +672,13 @@ methods
         F5 = (F5_max + F5_min) / 2;
  
         consumer_benefit_limit = max(0,time/2*consumer_benefit_penalty); %clip at -50    to max. MGO_PROFIT without setting icn
-        if any(flag)
-            consumer_benefit_limit = consumer_benefit_limit - time/2*sum(flag);
-        end
+        % if any(flag)
+        %     consumer_benefit_limit = consumer_benefit_limit - time/2*sum(flag);
+        % end
         penalties_max = time/2 * (balance_penalty_max  + daily_curtailment_penalty...
-            + budget_limit_penalty + generation_penalty_max + ramp_penalty_max )+ consumer_benefit_limit + sum(action_penalty) ;
+            + budget_limit_penalty + generation_penalty_max + ramp_penalty_max)+ consumer_benefit_limit;
         penalties_min = time/2* (balance_penalty_min  + daily_curtailment_penalty...
-            + budget_limit_penalty + generation_penalty_min + ramp_penalty_min)  + consumer_benefit_limit + sum(action_penalty);
+            + budget_limit_penalty + generation_penalty_min + ramp_penalty_min)  + consumer_benefit_limit; %actionb penalty here
         penalties = (penalties_max + penalties_min) / 2;
         
         %% Compute total reward
@@ -654,7 +686,7 @@ methods
         power_transfer_cost = power_transfer_cost / this.ref_f1;
         mgo_profit = mgo_profit / this.ref_f3;
         reward = -this.w1 *(generation_cost) - this.w2*(power_transfer_cost) + this.w3 * (mgo_profit)...
-        - this.w4 * penalties + this.w5 * F5;
+        - penalties + this.w4 * F5;
         % if time == 24
         %     if penalties < 100 & mgo_profit > 250
         %         reward = reward + 1000*(mgo_profit - 250);
@@ -714,7 +746,6 @@ methods
             'VDI_avg', (resilience_metric(3) + resilience_metric(4))/2, ...
             'LEI_avg', (resilience_metric(1) + resilience_metric(2))/2, ...
             'action', scaled_action, ...
-            'action_penalty', action_penalty ,...
             'vmag', Vmagdata, ...
             'tie_lines', x,...
             'f1min', this.f1min, ...

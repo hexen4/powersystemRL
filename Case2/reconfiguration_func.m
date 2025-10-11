@@ -1,7 +1,7 @@
 
-function [LD,rowsToRemove,x]=reconfiguration_func(load_percent,pv,wt,curtailed,bat_powers,disaster,training)
+function [LD,rowsToRemove,x]=reconfiguration_func(resi,comm,indu,pv,wt,curtailed,bat_powers,disaster,training)
 %%% outputs line data (with tie switches) and sectionalising switches
-    [BD,LD,TL,rowsToRemove]=disaster_model(load_percent,pv,wt,curtailed,bat_powers,disaster,training); %%---Bus, line, and tie data---%%
+    [BD,LD,TL,rowsToRemove]=disaster_model(resi,comm,indu,pv,wt,curtailed,bat_powers,disaster,training); %%---Bus, line, and tie data---%%
     Vbase=11; %%---Base Voltage in kV---%%
     Sbase=10; %%---Base Power in MVA---%%
     

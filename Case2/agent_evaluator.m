@@ -11,16 +11,16 @@ close all; clear all;
 % for i = 1:numel(agentFiles)
 %     filePath = fullfile(folderPath, agentFiles(i).name);
 %     saved_agent = load(filePath).saved_agent;
-saved_agent = load('savedAgents\Agent20000.mat').saved_agent;
+% saved_agent = load('savedAgents\Agent20000.mat').saved_agent;
 env = Copy_of_environment_case3();
 T = 24; 
 observations = zeros(env.N_OBS, T+1);
 rewards = zeros(1, T);
-Action_scaled = zeros(10,T);
-Action = zeros(10,T);
+Action_scaled = zeros(37,T);
+Action = zeros(37,T);
 done_flags = false(1, T);
-zero_action = [0*ones(5,1);0;0.5*ones(4,1)]; 
-trained = 1;
+zero_action = [zeros(32,1);0;0.5*ones(4,1)]; 
+trained = 0;
 observations(:,1) = env.State;  
 tic;
 for t = 1:T
@@ -29,7 +29,7 @@ for t = 1:T
         saved_agent.UseExplorationPolicy = 0;
         action = cell2mat(getAction(saved_agent, currentObs));
     else
-    action = zero_action;
+        action = zero_action;
     end 
 elapsed_time = toc; % Stop timer and get elapsed time in seconds
 fprintf('Total elapsed time: %.4f seconds\n', elapsed_time);
@@ -39,7 +39,7 @@ fprintf('Total elapsed time: %.4f seconds\n', elapsed_time);
     bat_min = max(-env.Pbatmax*ones(4,1),env.SOC_min - currentObs(env.IDX_SOC));
     bat_max=  min(env.Pbatmax*ones(4,1),env.SOC_max - currentObs(env.IDX_SOC));
     max_action = [0.6.*env.State(env.IDX_PROSUMER_PKW); max_incentive; bat_max]; %constraint 4
-    min_action = [zeros(5,1);min_incentive; bat_min];
+    min_action = [zeros(32,1);min_incentive; bat_min];
     
     action_scaled = env.scale_action(action,max_action,min_action);
     Action_scaled(:,t) = action_scaled;
@@ -71,13 +71,13 @@ for w= 1:24
     daily(w) = env.EpisodeLogs{1, w}.daily_curtailment_penalty;
     VDI(w) =env.EpisodeLogs{1, w}.VDI_avg;
     LEI(w) = env.EpisodeLogs{1, w}.LEI_avg;
-    f1(w) = env.w1*env.EpisodeLogs{1, w}.f1;
-    f2(w) =  env.w2*env.EpisodeLogs{1, w}.f2;
-    f3(w) =  env.w3*env.EpisodeLogs{1, w}.f3;
-    f4(w) =  env.w4*env.EpisodeLogs{1, w}.f4;
+    f1(w) = env.EpisodeLogs{1, w}.f1;
+    f2(w) =  env.EpisodeLogs{1, w}.f2;
+    f3(w) =  env.EpisodeLogs{1, w}.f3;
+    f4(w) =  env.EpisodeLogs{1, w}.f4;
     ramp_penalty(w) = env.EpisodeLogs{1, w}.ramp_penalty;
     generator(w) = env.EpisodeLogs{1, w}.generation_penalty;
-    f5(w) =  env.w5*env.EpisodeLogs{1, w}.f5;
+    f5(w) =  env.w4*env.EpisodeLogs{1, w}.f5;
     bus_voltages{w} = env.EpisodeLogs{1,w}.vmag;
     tie_line(1:length(env.EpisodeLogs{1,w}.tie_lines),w) = env.EpisodeLogs{1,w}.tie_lines;
     LEI_unscaled(w) = (env.EpisodeLogs{1,w}.LEI_MAX_unscaled+env.EpisodeLogs{1,w}.LEI_MIN_unscaled)/2;
@@ -331,30 +331,30 @@ disp("w5f5" + " " + env.w5*env.EpisodeLogs{1, 24}.f5)
 % WT_mean = (observations(6,:) + observations(7,:)) / 2;
 % PV_mean = (observations(4,:) + observations(5,:)) / 2;
 % gen_power_mean = (observations(1,:) + observations(2,:)) / 2;
-grid_mean = (observations(44,:));
-WT_mean = (observations(6,:));
-PV_mean = (observations(4,:));
-gen_power_mean = (observations(1,:));
-observations_noDR = load("savedconstants/obs_noaction.mat").observations2;
-load_demand = observations(8,1:24)-sum(curtailed,1)+sum(batt,1);
-data = [grid_mean(1:24);WT_mean(1:24);PV_mean(1:24);gen_power_mean(1:24)]';
-bar(data,'stacked')
-hold on
-plot(load_demand, LineWidth=2)
-hold on
-plot(observations_noDR(8,1:24),LineWidth=2)
-
-legend("Power exchange between grid and MG", ...
-    "Power output of wind-based DG","Power output of solar-based DG", ...
-    "Power output of conventional DG","Post DR load demand","Actual load demand")
-ylabel("Power (KW)")
-xlabel("Time (Hour)")
-set(gca, 'FontName', 'Times', 'FontSize', 24, 'FontWeight', 'bold');
-ax = gca;
-set(gcf, 'Position', [100, 100, 1000, 800]); 
-legend('Location', 'southeast');
+% grid_mean = (observations(44,:));
+% WT_mean = (observations(6,:));
+% PV_mean = (observations(4,:));
+% gen_power_mean = (observations(1,:));
+% observations_noDR = load("savedconstants/obs_noaction.mat").observations2;
+% load_demand = observations(8,1:24)-sum(curtailed,1)+sum(batt,1);
+% data = [grid_mean(1:24);WT_mean(1:24);PV_mean(1:24);gen_power_mean(1:24)]';
+% bar(data,'stacked')
+% hold on
+% plot(load_demand, LineWidth=2)
+% hold on
+% plot(observations_noDR(8,1:24),LineWidth=2)
+% 
+% legend("Power exchange between grid and MG", ...
+%     "Power output of wind-based DG","Power output of solar-based DG", ...
+%     "Power output of conventional DG","Post DR load demand","Actual load demand")
+% ylabel("Power (KW)")
+% xlabel("Time (Hour)")
+% set(gca, 'FontName', 'Times', 'FontSize', 24, 'FontWeight', 'bold');
+% ax = gca;
+% set(gcf, 'Position', [100, 100, 1000, 800]); 
+% legend('Location', 'southeast');
 % Set background to white for better appearance:
-set(gcf,'Color','w');
+% set(gcf,'Color','w');
 
 % Save figure as PNG at high resolution (e.g., 300 dpi):
 %print(gcf, 'fig5b.png', '-dpng', '-r800');
