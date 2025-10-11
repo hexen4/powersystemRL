@@ -8,7 +8,7 @@ T = 24;
     %     'VariableTypes', {'string','single','single','single','single'}, ...
     %     'VariableNames', {'AgentName', 'F1', 'F2', 'F3','Reward'});
 trained = 1;
-saved_agent = load('Case1\savedAgents_1DPPG\Agent19213.mat').saved_agent;
+saved_agent = load('Case1\savedAgents_1DPPG\Agent20000.mat').saved_agent;
 % for i = 1:numel(agentFiles)
 env = Copy_of_environment();
     %filePath = fullfile(folderPath, agentFiles(i).name);

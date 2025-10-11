@@ -1,0 +1,1 @@
+traininginfo = training_CaseI(1,42,1,256,"DDPG");
