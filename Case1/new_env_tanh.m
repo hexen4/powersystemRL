@@ -1,26 +1,37 @@
-classdef new_env_tanh< rl.env.MATLABEnvironment    
+classdef new_env_tanh < rl.env.MATLABEnvironment    
     properties
-        % Weights for objectives
-        f1min;
-        f1max;
-        f2min;
-        f2max;
-        f3min;
-        f3max;
+        %% Weights for objectives
         w1;
         w2;
         w3;
         w4;
+        %% variables
         H;
         market_prices; %$/MWh
-        load_percent; 
+        load_resi;
+        load_comm;
+        load_indu;
         State;
         wt_KW_max;
         pv_KW_max;
         wt_KW_min;
         pv_KW_min;
-        customer_ids;
+        time;
+        %% constants
+        customer_ids_residential;
+        customer_ids
+        customer_ids_commercial;
+        load_percent;
+        customer_ids_industrial;
         init_obs;
+        n_cust;
+        Sbase;
+        PENALTY_FACTOR;
+        Zbase;
+        N_OBS;
+        discomforts;
+        lambda_;
+        %% state init.
         IDX_POWER_GEN_MAX; %smaller as max values used
         IDX_POWER_GEN_MIN;
         IDX_MARKET_PRICE;
@@ -39,49 +50,42 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
         IDX_BUDGET_SUM; %maybe include discomforts as well. maybe include pgridmax pgridmin as well
         IDX_DISCOMFORTS;
         IDX_TIME;
-        Sbase;
-        PENALTY_FACTOR;
-        time;
-        N_OBS;
         EpisodeLogs;
         AllLogs;
-        lambda_
         f4;
         f3;
         f2;
         f1;
         minprice;
-        % IDX_PGRIDMAX;
-        % IDX_PGRIDMIN;
-
+        reconfiguration;
+        training 
     end
     
     properties(Access = protected)
         % Termination Flag
         IsDone = false;  
-        training = 0;
+        
     end
 
     methods              
         function this = new_env_tanh()
             %% compatability with RL 
-            ObservationInfo = rlNumericSpec([38 1], ...
+            ObservationInfo = rlNumericSpec([173 1], ...
                 'LowerLimit', -inf, 'UpperLimit', inf);
             ObservationInfo.Name = 'Microgrid State';
-            ActionInfo = rlNumericSpec([6 1], ...
+            ActionInfo = rlNumericSpec([33 1], ...
                 'LowerLimit', -1 , 'UpperLimit', 1); 
             ActionInfo.Name = 'Microgrid Action';
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
-            this.PENALTY_FACTOR = 1.8;  
+            this.reconfiguration = 1;
+            this.PENALTY_FACTOR = 1;  
             w1 = 1;
             w2 = 1;
             w3 = 10;
-            w4 = 1;
-            this.w1 = w1/(w1+w2+w3+w4);
-            this.w2 = w2/(w1+w2+w3+w4);
-            this.w3 = w3/(w1+w2+w3+w4);
-            this.w4 = w4/(w1+w2+w3+w4);
+            this.w1 = w1/(w1+w2+w3);
+            this.w2 = w2/(w1+w2+w3);
+            this.w3 = w3/(w1+w2+w3);
             this.H = 24;
             this.EpisodeLogs = {};   
             this.AllLogs = {};       
@@ -91,22 +95,9 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             this.f2= 0;
             this.f1 = 0;
             this.lambda_ = 0.4;
-            this.f1min =0;
-            this.f1max=0;
-            this.f2min=0;
-            this.f2max=0;
-            this.f3min=0;
-            this.f3max=0;
-            %%battery 
-            %this.SOC_max = 4; %MWh
-            %this.SOC_min = 1; %MWh
-            %this.SOC_init = 2; %Mwh
-            %this.battery_efficiency = 95; %percent
-            %this.maxcharge = 1; %MW
-            % decision variables -> charging power, discharging power. need
-            % if else statement, cannot charge and discharge at the same
-            % time. need to include in PF (buying more fuel at lower
-            % prices)
+            this.n_cust = 32;
+            this.Sbase = 10; %MVA
+            this.Zbase = 121/10;
             %% indices of state
             this.IDX_POWER_GEN_MAX            = 1; %matching prev line losses
             this.IDX_POWER_GEN_MIN            = 2; %matching prev line losses (i.e. at t = 2, power_gen = line losses at t = 1)
@@ -118,50 +109,73 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             this.IDX_TOTAL_LOAD               = 8;
             this.IDX_PREV_GENPOWER_MAX        = 9;
             this.IDX_PREV_GENPOWER_MIN        = 10;
-            this.IDX_PROSUMER_PKW             = 11:15;   % 5 consumers
-            this.IDX_PROSUMER_SUM             = 16:20;   % t
-            this.IDX_CURTAILED_SUM            = 21:25;   % t
-            this.IDX_BENEFIT_SUM              = 26:30;   % t
-            this.IDX_BUDGET_SUM              = 31; % t
-            this.IDX_MARKET_MINPRICE = 32;
-            this.IDX_DISCOMFORTS = 33:37;
-            this.IDX_TIME = 38;
-            %this.IDX_PGRIDMAX = 39;
-            %this.IDX_PGRIDMIN = 40;
-            %this.IDX_F1 = 41;
-            %this.IDX_F2 = 42;
-            %this.IDX_F3 = 43;
-
-            %this.SOC = 33;
+            this.IDX_PROSUMER_PKW             = 11:42;   % 5 consumers
+            this.IDX_PROSUMER_SUM             = 43:74;   % t
+            this.IDX_CURTAILED_SUM            = 75:106;   % t
+            this.IDX_BENEFIT_SUM              = 107:138;   % t
+            this.IDX_BUDGET_SUM              = 139; % t
+            this.IDX_MARKET_MINPRICE = 140;
+            this.IDX_DISCOMFORTS = 141:172;
+            this.IDX_TIME = 173;
             this.N_OBS = this.IDX_TIME;
             %% read tables
             this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
             this.load_percent = readtable("data/Copy_of_solar_wind_data.csv").hourly_load;  
+            this.load_resi = readtable("data/Copy_of_solar_wind_data.csv").residential;  
+            this.load_comm = readtable("data/Copy_of_solar_wind_data.csv").commercial;  
+            this.load_indu = readtable("data/Copy_of_solar_wind_data.csv").industrial;  
             this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
             this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
             this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
             this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
             this.customer_ids = [9,22,14,30,25] ; %SS line included in customers -> +1
+            this.customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
+            this.customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
+            this.customer_ids_industrial =[7,8,9,16,17,23,26,28];
+            this.discomforts =[repmat(0.33, 1, numel(this.customer_ids_residential)), ...
+            repmat(0.66, 1, numel(this.customer_ids_commercial)), ...
+            repmat(1.00, 1, numel(this.customer_ids_industrial))];
             this.State = zeros(this.N_OBS,1);
             this.init_obs = zeros(this.N_OBS,1);
     
-
+            this.training = 0;
 
             %% cache state t = 1
             this.Sbase = 10; %MVA
+            %% reconfiguration
+            if this.reconfiguration == 1
+                [LD_new_max,~] = reconfiguration_func(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1), this.pv_KW_max(1), ...
+                this.wt_KW_max(1),zeros(this.n_cust,1),this.training);
+                [LD_new_min,~] = reconfiguration_func(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1), ...
+                this.wt_KW_min(1),zeros(this.n_cust,1),this.training);
 
-            [init_BD_max,init_LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_percent(1), this.pv_KW_max(1),this.wt_KW_max(1),zeros(5,1));
+                LD_new_max(:,4:5)=LD_new_max(:,4:5)*this.Zbase;
+                LD_new_min(:,4:5)=LD_new_min(:,4:5)*this.Zbase;
+
+                [init_BD_max,init_LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1),this.pv_KW_max(1),this.wt_KW_max(1),zeros(this.n_cust,1),LD_new_max);
+                [init_BD_min,init_LD_min,TL,~,~]= ieee33(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1),LD_new_min);
+            
+            else
+                [init_BD_max,init_LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(1), ...
+                    this.load_comm(1),this.load_indu(1),this.pv_KW_max(1),this.wt_KW_max(1),zeros(this.n_cust,1));
+                [init_BD_min,init_LD_min,TL,~,~]= ieee33(this.load_resi(1), ...
+                this.load_comm(1),this.load_indu(1), this.pv_KW_min(1),this.wt_KW_min(1),zeros(this.n_cust,1));
+            end
+            %% power flow
             nbr=size(init_LD_max,1);
             nbus=size(init_BD_max,1);
             [init_Yb_max] = Ybus(init_LD_max,nbr,nbus);
             [init_Vmag_max, init_theta_max, init_Pcalc_max, init_Qcalc_max]= NR_zero_PQVdelta(init_BD_max,init_Yb_max,nbus); 
-
-            [init_BD_min,init_LD_min,TL,~,~]= ieee33(this.load_percent(1), this.pv_KW_min(1),this.wt_KW_min(1), zeros(5,1));
             [init_Yb_min] = Ybus(init_LD_min,nbr,nbus);
             [init_Vmag_min, init_theta_min, init_Pcalc_min, init_Qcalc_min]= NR_zero_PQVdelta(init_BD_min,init_Yb_min,nbus); 
-
-            this.init_obs(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(init_BD_max(12,7) + init_Pcalc_max(12,1)); %fix this
-            this.init_obs(this.IDX_POWER_GEN_MIN) = 1000*this.Sbase*single(init_BD_min(12,7) + init_Pcalc_min(12,1)); %fix this
+            
+            %% save into initial state
+            this.init_obs(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(init_BD_max(12,7) + init_Pcalc_max(12,1)); 
+            this.init_obs(this.IDX_POWER_GEN_MIN) = 1000*this.Sbase*single(init_BD_min(12,7) + init_Pcalc_min(12,1)); 
             this.init_obs(this.IDX_TOTAL_LOAD)      = single(sumload_b4_action);
             this.init_obs(this.IDX_PROSUMER_PKW)      = single(CPKW_b4_action);
             this.init_obs(this.IDX_MARKET_PRICE) = single(this.market_prices(1));
@@ -174,13 +188,10 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             this.init_obs(this.IDX_TIME) = 1;
             this.init_obs(this.IDX_PREV_GENPOWER_MAX) = 0;
             this.init_obs(this.IDX_PREV_GENPOWER_MIN) = 0;
-            this.init_obs(this.IDX_CURTAILED_SUM) = zeros(5,1);
-            this.init_obs(this.IDX_BENEFIT_SUM) = zeros(5,1);
-            this.init_obs(this.IDX_DISCOMFORTS) = zeros(5,1); 
+            this.init_obs(this.IDX_CURTAILED_SUM) = zeros(this.n_cust,1);
+            this.init_obs(this.IDX_BENEFIT_SUM) = zeros(this.n_cust,1);
+            this.init_obs(this.IDX_DISCOMFORTS) = zeros(this.n_cust,1); 
             this.init_obs(this.IDX_BUDGET_SUM) = 0;
-            %this.init_obs(this.IDX_PGRIDMAX) = this.init_obs(this.IDX_TOTAL_LOAD) - this.init_obs(this.IDX_WIND_MAX) - this.init_obs(this.IDX_SOLAR_MAX);
-            %this.init_obs(this.IDX_PGRIDMIN) = this.init_obs(this.IDX_TOTAL_LOAD) - this.init_obs(this.IDX_WIND_MIN) - this.init_obs(this.IDX_SOLAR_MIN);
-
             %others are 0 either due to 0 curtailment or no prev gen power
             this.State = this.init_obs;          
         end
@@ -188,17 +199,38 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
         function next_state = update_state(this, State, Action, time)
             %%% whole point of NR is to calculate line losses and set pgen
             prev_curtailed = Action(1:end-1);
-            %% max values
-            [BD_max,LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_percent(time-1), this.pv_KW_max(time-1),this.wt_KW_max(time-1),prev_curtailed);
+            if this.reconfiguration == 1
+                [LD_new_max,~] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1),this.wt_KW_max(time-1),prev_curtailed,this.training);
+                [LD_new_min,~] = reconfiguration_func(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1),this.wt_KW_min(time-1),prev_curtailed,this.training);
+
+
+                LD_new_max(:,4:5)=LD_new_max(:,4:5)*this.Zbase;
+                LD_new_min(:,4:5)=LD_new_min(:,4:5)*this.Zbase;
+
+                [BD_max,LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1),this.wt_KW_max(time-1),prev_curtailed,LD_new_max);
+                [BD_min,LD_min,TL,~,~]= ieee33(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1),this.wt_KW_min(time-1),prev_curtailed,LD_new_min);
+            
+            else
+                [BD_max,LD_max,TL,CPKW_b4_action,sumload_b4_action]= ieee33(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_max(time-1),this.wt_KW_max(time-1),prev_curtailed);
+                [BD_min,LD_min,TL,~,~]= ieee33(this.load_resi(time-1), ...
+                this.load_comm(time-1),this.load_indu(time-1), this.pv_KW_min(time-1),this.wt_KW_min(time-1),prev_curtailed);
+            end
+            
+            %% power flow
             nbr=size(LD_max,1);
             nbus=size(BD_max,1);
             [Yb_max] = Ybus(LD_max,nbr,nbus);
             [Vmag_max, theta_max, Pcalc_max, Qcalc_max]= NR_zero_PQVdelta(BD_max,Yb_max,nbus); %POWER FLOW
-            %% using min values
-            [BD_min,LD_min,TL,~,~]= ieee33(this.load_percent(time-1), this.pv_KW_min(time-1),this.wt_KW_min(time-1),prev_curtailed);
             [Yb_min] = Ybus(LD_min,nbr,nbus);
             [Vmag_min, theta_min, Pcalc_min, Qcalc_min]= NR_zero_PQVdelta(BD_min,Yb_min,nbus); 
-            
+            % if any(abs(1-Vmag_min)> 0.05) || any(abs(1-Vmag_max)> 0.05)
+            %     display(time)
+            % end
             %% Initialize next state (s_{t+1})
             next_state = zeros(this.N_OBS, 1);
             next_state(this.IDX_POWER_GEN_MAX) = 1000*this.Sbase*single(BD_max(12,7) + Pcalc_max(12,1)); %pgen to match prev time
@@ -225,7 +257,7 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
         min_incentive = this.State(this.IDX_MARKET_MINPRICE)*0.3;
         max_incentive = this.State(this.IDX_MARKET_MINPRICE); %constraint 8
         max_action = [0.6.*this.State(this.IDX_PROSUMER_PKW); max_incentive]; %constraint 4
-        min_action = [zeros(5,1);min_incentive];
+        min_action = [zeros(this.n_cust,1);min_incentive];
         Action = this.scale_action(Action,max_action,min_action);
 
         %% Update state 
@@ -236,13 +268,15 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
         [Reward, logStruct,Observation] = ...
         this.calculate_reward(Action, Observation_old, this.time, this.State); %R(s',a, s)
         this.State = Observation;
-        
-        this.EpisodeLogs{end+1} = logStruct;        
+              
         %% Check if episode is done  
         IsDone = (this.time >= this.H);
+        if this.training == 0
+            this.EpisodeLogs{end+1} = logStruct;
+        end
         if IsDone
             if this.training == 1
-            this.reset();
+                this.reset();
             end
         end
 
@@ -275,16 +309,14 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             % 4) Clamp in case of numerical overflow.
             action = min( max(scaledAction, min_action), max_action );
         end
-
         %(optional) Properties validation through set methods
         % function set.State(this,state)
         %     validateattributes(state,{'numeric'},{32},'','State');
-        %     this.State = single(state(:));
+        %     this.State = double(state(:));
         %     notifyEnvUpdated(this);
         % end
         function discomforts = calculate_discomforts(this,xjh,pjh)
-             CONSUMER_BETA = [1,2,2,3,3];
-             discomforts = exp(CONSUMER_BETA' .* (xjh ./ pjh)) - 1;
+             discomforts = exp(this.discomforts' .* (xjh ./ pjh)) - 1;
         end
         function cost = cal_costgen(this,power_gen)
             % Calculate the generation cost based on power generation.
@@ -314,7 +346,7 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             total_supply = P_grid + P_solar + P_wind;
             total_demand = total_load - sum(curtailed);
             if abs(total_supply - total_demand) > 1e-5
-                penalty = this.PENALTY_FACTOR * abs(total_supply - total_demand);
+                penalty = abs(total_supply - total_demand);
             else
                 penalty = 0;
             end
@@ -325,9 +357,9 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             PGEN_MIN = 35;
             PGEN_MAX = 300;
             if P_gen < PGEN_MIN
-                penalty = this.PENALTY_FACTOR * abs(PGEN_MIN - P_gen);
+                penalty = abs(PGEN_MIN - P_gen);
             elseif P_gen > PGEN_MAX
-                penalty = this.PENALTY_FACTOR * abs(P_gen - PGEN_MAX);
+                penalty = abs(P_gen - PGEN_MAX);
             else
                 penalty = 0;
             end
@@ -342,9 +374,9 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             end
             delta = P_gen - P_gen_prev;
             if delta > PRAMPUP
-                penalty = abs(this.PENALTY_FACTOR * (delta - PRAMPUP));
+                penalty = abs((delta - PRAMPUP));
             elseif delta < -PRAMPDOWN
-                penalty = abs(this.PENALTY_FACTOR * (delta + PRAMPDOWN));
+                penalty = abs((delta + PRAMPDOWN));
             else
                 penalty = 0;
             end
@@ -360,9 +392,10 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
 
         end 
         function [penalty, benefit_diff] = indivdiual_consumer_benefit(this,incentive, curtailed, discomforts, prev_benefit,time)
-            epsilon = [1;0.9;0.7;0.6;0.4];
+            epsilon = this.discomforts';
             curtailed = curtailed ./ 1000;
             benefit_diff = (epsilon .* incentive .* curtailed - (1 - epsilon) .* discomforts) + prev_benefit;
+
             violations = benefit_diff < 0;
             non_violations = ~violations;
             
@@ -375,7 +408,7 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
         function [penalty, total_cost] = budget_limit_constraint(this,incentive, curtailed, prev_budget,time)
             % Check that the total cost does not exceed the specified budget.
             curtailed = curtailed ./ 1000;
-            budget = 500;
+            budget = 3200;
             total_cost = sum(incentive .* curtailed) + prev_budget;
             if total_cost > budget
 
@@ -435,27 +468,18 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
             % Constraint 9
             [budget_limit_penalty, budget] = this.budget_limit_constraint(incentive, curtailed, state(this.IDX_BUDGET_SUM),time);
             %% interval optimisation
-            consumer_benefit_limit = max(0,time^1*consumer_benefit_penalty); %clip at -30 for maximum benefit and minimise 
-            penalties_max = time * (balance_penalty_max  + daily_curtailment_penalty...
+            consumer_benefit_limit = max(0,consumer_benefit_penalty); %clip at -30 for maximum benefit and minimise 
+            penalties_max = (time/2) * (balance_penalty_max  + daily_curtailment_penalty...
                 + budget_limit_penalty + generation_penalty_max + ramp_penalty_max) + sum(consumer_benefit_limit) ;
-            penalties_min = time * (balance_penalty_min  + daily_curtailment_penalty...
+            penalties_min = (time/2) * (balance_penalty_min  + daily_curtailment_penalty...
                 + budget_limit_penalty + generation_penalty_min + ramp_penalty_min) + sum(consumer_benefit_limit);
             penalties = (penalties_max + penalties_min) / 2;
 
             %Compute total reward
             reward = -this.w1 *generation_cost - this.w2*power_transfer_cost + this.w3 * mgo_profit...
-            - this.w4 * penalties;
-            % if time == 24
-            %     if penalties < 100 & mgo_profit > 250
-            %         reward = reward + 1000*(mgo_profit - 250);
-            %     elseif penalties > 1e3 & mgo_profit < 200
-            %         reward = reward - 1000*(200 - mgo_profit);
-            %     end
-            % end
-            %reward = reward / 10^6; %scale between [-1,1]
+            -  penalties;
             %% add sums to next_state
-            % next_state(this.IDX_PGRIDMAX) = single(P_grid_max);
-            % next_state(this.IDX_PGRIDMAX) = single(P_grid_min);
+           
             next_state(this.IDX_BENEFIT_SUM) = single(benefit);
             next_state(this.IDX_BUDGET_SUM) = single(budget);
             next_state(this.IDX_DISCOMFORTS) = single(discomforts);
@@ -466,11 +490,6 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
                 this.f2 = this.f2 + generation_cost;
                 this.f3 = this.f3 + mgo_profit;
                 this.f4 = this.f4 + penalties;
-                this.f1min = this.f1min +power_transfer_cost_min;
-                this.f1max = this.f1max +power_transfer_cost_max;
-                this.f2min = this.f2min + generation_cost_min;
-                this.f2max = this.f2max + generation_cost_max;
-                this.f3min = mgo_profit;
                 logStruct = struct(...
                 'P_grid_max', P_grid_max, ...
                 'P_grid_min', P_grid_min, ...
@@ -494,14 +513,7 @@ classdef new_env_tanh< rl.env.MATLABEnvironment
                 'mgo_profit_culm', this.f3, ...
                 'sum_penalties', this.f4, ...
                 "penalties", penalties,...
-                "time", time,...
-                'action', scaled_action, ...
-                'f1min', this.f1min, ...
-                'f1max',this.f2max, ...
-                'f2min',this.f2min, ...
-                'f2max',this.f2max, ...
-                'f3min',this.f3min, ...
-                'f3max',this.f3max ...
+                'action', scaled_action ...
             );
             else
                 logStruct = 0;

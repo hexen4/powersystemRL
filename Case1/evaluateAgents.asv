@@ -16,8 +16,8 @@ function agentResults = evaluateAgents(reconfiguration,folderPath)
         'VariableTypes', {'string','single','single','single','single'}, ...
         'VariableNames', {'AgentName', 'F1', 'F2', 'F3', 'Reward'});
 
-   for i = 1:5
-    env.reset();
+   for i = 1:10
+    env.reset()
     if reconfiguration == 1
         env.reconfiguration = 1;
     else

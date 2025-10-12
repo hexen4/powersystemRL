@@ -1,27 +1,19 @@
+function [] = singleagent_evaluator(filepath)
+% singleagent_evaluator - evalutes single agent. draws pretty figures
 T = 24; 
- % folderPath = 'savedAgents_1DPPG/'; % change to your folder
-    % agentFiles = dir(fullfile(folderPath, '*.mat'));
-    % agentResults_sorted =sortrows(agentResults2,"Reward","descend");
-    % agentFiles = agentResults_sorted.AgentName(1:100);
-    % numAgents = numel(agentFiles);
-    % agentResults = table('Size', [numAgents, 5], ...
-    %     'VariableTypes', {'string','single','single','single','single'}, ...
-    %     'VariableNames', {'AgentName', 'F1', 'F2', 'F3','Reward'});
 trained = 1;
-saved_agent = load('Case1\savedAgents_1DPPG\Agent20000.mat').saved_agent;
-% for i = 1:numel(agentFiles)
+
+saved_agent = load(filepath).saved_agent;
 env = Copy_of_environment();
-    %filePath = fullfile(folderPath, agentFiles(i).name);
-    % filePath = fullfile(folderPath, agentFiles(i));
+saved_agent.UseExplorationPolicy = 0;
+env.training = 0;
 observations = zeros(env.N_OBS, T+1);
-% saved_agent = load(filePath).saved_agent;
 rewards = zeros(1, T);
 Action_scaled = zeros(33,T);
 Action = zeros(33,T);
 done_flags = false(1, T);
 zero_action = zeros(33,1); 
 observations(:,1) = env.State;  
-%saved_agent = saved_agent;
 for t = 1:T
     currentObs = observations(:, t);
     if trained == 1
@@ -260,3 +252,4 @@ legend("consumer","daily","mgo_timestep")
 % 
 % % Save figure as PNG at high resolution (e.g., 300 dpi):
 % print(gcf, 'incentivefig.png', '-dpng', '-r800');
+end 

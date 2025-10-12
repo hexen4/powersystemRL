@@ -313,8 +313,8 @@ function [trainingInfo] = training_CaseI(training, seed, reconfiguration,HL_size
                 'MiniBatchSize',         128, ...
                  'NumStepsToLookAhead',   24 ... %1 for RNN. number of future rewards used to estimate value (how many gammas)
              );
-                %'SequenceLength',        1, ... %for RNN 
-            %% ===== CREATE AND TRAIN AGENT =====
+                %'SequenceLength',        1, ...
+                    %% ===== CREATE AND TRAIN AGENT =====
             agent = rlDDPGAgent(actor, critic, agentOpts);
                     % Exploration Noise:
             agentOpts.NoiseOptions.StandardDeviation          = 0.9;   % High initial exploration
