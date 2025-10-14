@@ -1,5 +1,5 @@
 % Define parameters
-max_episodes = 10000;  % Adjust as needed
+max_episodes = 1;  % Adjust as needed
 max_seeds = 5;
 reconfiguration = 1;  % Adjust as needed
 HL_size = 256;
@@ -18,9 +18,9 @@ for seed = 1:max_seeds
     % Evaluate agent
     table_result = evaluateAgents(reconfiguration, filepath);
     
-    % Save individual results immediately
-    save(sprintf('training_results_seed%d.mat', seed), ...
-          'table_result', 'seed', 'HL_size', 'reconfiguration');
+    % % Save individual results immediately
+    % save(sprintf('training_results_seed%d.mat', seed), ...
+    %      'training_info', 'table_result', 'seed', 'HL_size', 'reconfiguration');
     
     fprintf('Completed seed %d. Results saved.\n', seed);
 end

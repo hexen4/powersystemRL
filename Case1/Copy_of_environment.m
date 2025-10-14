@@ -471,6 +471,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             %Compute total reward
             reward = -this.w1 *generation_cost - this.w2*power_transfer_cost + this.w3 * mgo_profit...
             -  penalties;
+            reward = reward / 10;
             %% add sums to next_state
            
             next_state(this.IDX_BENEFIT_SUM) = single(benefit);

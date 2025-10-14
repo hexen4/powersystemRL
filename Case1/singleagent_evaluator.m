@@ -1,9 +1,10 @@
 function [] = singleagent_evaluator(filepath)
 % singleagent_evaluator - evalutes single agent. draws pretty figures
 T = 24; 
-trained = 1;
-
-saved_agent = load(filepath).saved_agent;
+trained = 0;
+if nargin == 1
+    saved_agent = load(filepath).agent;
+end
 env = Copy_of_environment();
 saved_agent.UseExplorationPolicy = 0;
 env.training = 0;
@@ -12,7 +13,7 @@ rewards = zeros(1, T);
 Action_scaled = zeros(33,T);
 Action = zeros(33,T);
 done_flags = false(1, T);
-zero_action = zeros(33,1); 
+zero_action = ones(33,1); 
 observations(:,1) = env.State;  
 for t = 1:T
     currentObs = observations(:, t);

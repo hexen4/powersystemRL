@@ -181,12 +181,12 @@ methods
         this.init_obs = zeros(this.N_OBS,1);
         this.Sbase = 10; %MVA
         this.Zbase = 121/10;
-        this.ref_f1 = 2.8793774e+03; %% TODO CHANGE
-        this.ref_f2 =  5.0488446e+02; %% TODO CHANGE
+        this.ref_f1 = 3855.3515; %% TODO CHANGE
+        this.ref_f2 =  530.8238; %% TODO CHANGE
         this.LEI_MAX = 0;
         this.LEI_MIN = 0;
         this.ref_f3  = 5.9185754e+02; %% TODO CHANGE
-        this.ref_voltage = load("savedconstants_OLD\Vmag_reconfig.mat").vmag; %% TODO CHANGE
+        %this.ref_voltage = load("savedconstants_OLD\Vmag_reconfig.mat").vmag; %% TODO CHANGE
         this.customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
         this.customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
         this.customer_ids_industrial =[7,8,9,16,17,23,26,28];

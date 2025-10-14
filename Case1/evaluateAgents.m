@@ -9,14 +9,16 @@ function agentResults = evaluateAgents(reconfiguration,folderPath)
     %   agentResults : table containing AgentName, F1, F2, F3, Reward
 
     T = 24; % number of timesteps per episode
+    
     env = Copy_of_environment();
+    env.training = 0;
     agentFiles = dir(fullfile(folderPath, '*.mat'));
     numAgents = numel(agentFiles);
     agentResults = table('Size', [numAgents, 5], ...
         'VariableTypes', {'string','single','single','single','single'}, ...
         'VariableNames', {'AgentName', 'F1', 'F2', 'F3', 'Reward'});
 
-   for i = 1:5
+   for i = 1:numAgents
     env.reset();
     if reconfiguration == 1
         env.reconfiguration = 1;
