@@ -21,15 +21,11 @@ Statistics and Machine Learning Toolbox               Version 12.5        (R2023
 
 ## **Usage**
 
-### **Training**
-1) Set training = 1 in relevant environment(i.e. case2/copyt_of_environment_case3) and run
-2) If using SAC / TD3, run actor_generator.mlx and use case2/tanh_case3.
-3) Open RL Toolbox and insert relevant hyperparameters / agents
+1) Add Case 1 to path
+2) Change computer variable in main based on computer usage
+3) Run main.m; agent with reward > -10 will be saved, alongside the training info, and evaluation based on saved agents
 
-### **Testing**
 
-1) Set training = 0
-2) Use agent_evaluator for detailed results
 
 
 

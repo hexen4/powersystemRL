@@ -1,7 +1,7 @@
 function [] = singleagent_evaluator(filepath)
 % singleagent_evaluator - evalutes single agent. draws pretty figures
 T = 24; 
-trained = 0;
+trained = 1;
 if nargin == 1
     saved_agent = load(filepath).agent;
 end

@@ -1,4 +1,4 @@
-function agentResults = evaluateAgents(reconfiguration,folderPath)
+function agentResults = evaluateAgents(reconfiguration, folderPath, seed, HL_size, L2, LR_actor, LR_critic, DF, algo)
     % evaluateAgents - Evaluates all agents saved in a folder and returns a results table.
     %
     % This function runs through all saved agents, evaluates them in the
@@ -10,13 +10,12 @@ function agentResults = evaluateAgents(reconfiguration,folderPath)
 
     T = 24; % number of timesteps per episode
     
-    env = Copy_of_environment();
-    env.training = 0;
+    env = Copy_of_environment(0);
     agentFiles = dir(fullfile(folderPath, '*.mat'));
     numAgents = numel(agentFiles);
-    agentResults = table('Size', [numAgents, 5], ...
-        'VariableTypes', {'string','single','single','single','single'}, ...
-        'VariableNames', {'AgentName', 'F1', 'F2', 'F3', 'Reward'});
+    agentResults = table('Size', [numAgents, 6], ...
+        'VariableTypes', {'string','single','single','single','single','single'}, ...
+        'VariableNames', {'AgentName', 'F1', 'F2', 'F3', 'penalty_sum','Reward'});
 
    for i = 1:numAgents
     env.reset();
@@ -52,47 +51,47 @@ function agentResults = evaluateAgents(reconfiguration,folderPath)
         rewards(t) = reward;
 
     end 
-    % Guard against empty EpisodeLogs or shorter episodes
-    if ~isempty(env.EpisodeLogs)
-        lastLogIdx = min(T, size(env.EpisodeLogs,2));
-        % protect against empty entries
-        if ~isempty(env.EpisodeLogs{1, lastLogIdx})
-            f1 = env.EpisodeLogs{1, lastLogIdx}.power_transfer_cost_culm;
-            f2 = env.EpisodeLogs{1, lastLogIdx}.generator_cost_culm;
-            f3 = env.EpisodeLogs{1, lastLogIdx}.mgo_profit_culm;
-            finalBenefit = env.EpisodeLogs{1, lastLogIdx}.Benefit;
-            finalDailyCurt = env.EpisodeLogs{1, lastLogIdx}.daily_curtailment_penalty;
-        else
-            f1 = NaN; f2 = NaN; f3 = NaN;
-            finalBenefit = NaN; finalDailyCurt = NaN;
-        end
+
+    f1 = env.EpisodeLogs{1, T}.power_transfer_cost_culm;
+    f2 = env.EpisodeLogs{1, T}.generator_cost_culm;
+    f3 = env.EpisodeLogs{1, T}.mgo_profit_culm;
+    finalBenefit = env.EpisodeLogs{1, T}.Benefit;
+    finalDailyCurt = env.EpisodeLogs{1, T}.daily_curtailment_penalty;
+
+
+
+    % Check completion condition
+    if all(finalBenefit > 0) && finalDailyCurt == 0
+        agentResults.AgentName(i) = string(agentFiles(i).name);
+        agentResults.F1(i) = f1;
+        agentResults.F2(i) = f2;
+        agentResults.F3(i) = f3;
+        agentResults.penalty_sum(i) = 0;
+        agentResults.Reward(i) = sum(rewards);
     else
-        f1 = NaN; f2 = NaN; f3 = NaN;
-        finalBenefit = NaN; finalDailyCurt = NaN;
+        %if failed reawrd = -1e6;
+        agentResults.AgentName(i) = string(agentFiles(i).name);
+        agentResults.F1(i) = f1;
+        agentResults.F2(i) = f2;
+        agentResults.F3(i) = f3;
+        agentResults.penalty_sum(i) = sum(finalBenefit) + finalDailyCurt;
+        agentResults.Reward(i) = -1e6;
     end
-
-
-        % Check completion condition
-        if all(finalBenefit > 0) && finalDailyCurt == 0
-            agentResults.AgentName(i) = string(agentFiles(i).name);
-            agentResults.F1(i) = f1;
-            agentResults.F2(i) = f2;
-            agentResults.F3(i) = f3;
-            agentResults.Reward(i) = sum(rewards);
-        else
-            % If criteria are not met, mark as NaN and delete the agent file
-            agentResults.AgentName(i) = string(agentFiles(i).name);
-            agentResults{i, 2:end} = NaN;
-
-            fprintf('Deleting agent: %s (failed completion condition)\n', agentFiles(i).name);
-            delete(filePath);
-        end
    
-            
-    end
-end
 
-     
+    end
+
+if nargin >= 3
+% Create filename matching saveDir pattern
+tableName = sprintf('table_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s.mat', ...
+seed, reconfiguration, HL_size, L2, LR_actor, LR_critic, DF, algo);
+
+% Save in the same folder as agents
+tablePath = fullfile(tableName);
+save(tablePath, 'agentResults');
+fprintf('Results table saved as: %s\n', tableName);
+end
+end
 
 
 

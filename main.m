@@ -1,51 +1,40 @@
-% Define parameters
-max_episodes = 10000;  % Adjust as needed
-max_seeds = 5;
-reconfiguration = 1;  % Adjust as needed
-HL_size = 256;
+computer = 1; %PH change from 1 -> 2
 
 
-% Main loop for different seeds
-for seed = 1:max_seeds
-    fprintf('=== Running seed %d/%d ===\n', seed, max_seeds);
-    
-    % Train agent
-    training_info = training_CaseI(max_episodes, 1, seed, reconfiguration, HL_size, "DDPG");
-    
-    % Create unique filepath for this seed
-    filepath = sprintf('savedAgents_t1_s%d_r%d_h%d_DDPG\\', seed, reconfiguration, HL_size);
-    
-    % Evaluate agent
-    table_result = evaluateAgents(reconfiguration, filepath);
-    
-    % Save individual results immediately
-    save(sprintf('training_results_seed%d.mat', seed), ...
-          'table_result', 'seed', 'HL_size', 'reconfiguration');
-    
-    fprintf('Completed seed %d. Results saved.\n', seed);
+%% define constants
+seeds = 1; %include more when each agent works
+reconfiguration = 1;
+episodes = 15000;
+if computer == 1 %SAC settings from https://ieeexplore.ieee.org/document/10345718
+    algo = "SAC";
+    LR_actor = 1e-3;
+    LR_critic = 1e-3;
+    HL_size = 256;
+    batch_size = 128;
+    soft = 1e-3;
+    DF = 0.9;
+    temperature = 0.1;
+    experience_length = 1e6;
+    L2 = 1e-4;
+elseif computer ==2 %TD3 settings from https://www.mdpi.com/1996-1073/14/3/531
+    algo = "TD3";
+    LR_actor = 1e-4;
+    LR_critic = 1e-3;
+    HL_size = 256;
+    batch_size = 64;
+    soft = 0.005;
+    DF = 0.99;
+    experience_length = 1e6;
+    L2 = 1e-4;
+    temperature = 0;
+end 
+
+for seed = 1:length(seeds)
+    traininginfo = training_CaseI(episodes,seed,reconfiguration,HL_size,algo,LR_actor,LR_critic,DF,L2, ...
+         soft,batch_size,temperature,experience_length); %train (var name overwritten)
+    saveDir = sprintf('savedAgents_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s', ...
+        seed, reconfiguration, HL_size, L2, LR_actor, LR_critic, DF, algo);
+    filepath = [saveDir '\'];
+    table_evaluated = evaluateAgents(reconfiguration, filepath, seed, HL_size, L2, LR_actor, LR_critic, DF, algo); %evalulate on test; scaled by 0.9
 end
-
-
-% Display summary
-fprintf('\n=== Training Complete ===\n');
-%% training
-% saves struct - make sure not to interrupt (7-10 hours). otherwise, input file path of last saved agent into this function
-
-%traininginfo_reconfig_seed42 = training_CaseI(1,42,reconfiguration,256,"SAC"); %training =1,seed=42,reconfiguration = 1, HL_size = 512
-
-% traininginfo_reconfig_seed42_DDPG = training_CaseI(max_episodes,1,42,reconfiguration,256,"DDPG");
-% 
-% filepath = 'savedAgents_t1_s42_r1_h256_DDPG\';
-% table_h256_s42_r1 = evaluateAgents(reconfiguration,filepath); 
-
-%traininginfo_reconfig_seed42_TD3 = training_CaseI(max_episodes,1,1,reconfiguration,256,"TD3");
-
-%% evaluate saved agents
-%outputs table containing AgentName, F1, F2, F3, Reward. deletes constraint violating agents
-
-% filepath = 'savedAgents_t1_s42_r1_h256_DDPG\';
-% table_h512_t1_s42_r1 = evaluateAgents(reconfiguration,filepath); 
-
-%% evaluate a specific agent
-% filepath = 'simResults_t1_s42_r1_h216_DDPG.mat'; 
-% singleagent_evaluator(filepath) %displays f1,f2,f3, reward
+ 

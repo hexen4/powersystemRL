@@ -1,4 +1,4 @@
-classdef Copy_of_environment < rl.env.MATLABEnvironment    
+classdef Copy_of_environment < rl.env.MATLABEnvironment
     properties
         %% Weights for objectives
         w1;
@@ -68,8 +68,9 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
     end
 
     methods              
-        function this = Copy_of_environment()
+        function this = Copy_of_environment(trainingMode)
             %% compatability with RL 
+            warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
             ObservationInfo = rlNumericSpec([173 1], ...
                 'LowerLimit', -inf, 'UpperLimit', inf);
             ObservationInfo.Name = 'Microgrid State';
@@ -78,6 +79,11 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             ActionInfo.Name = 'Microgrid Action';
             % Call Base Class Constructor
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
+            if nargin > 0
+                this.training = trainingMode;
+            else
+                this.training = 1;  % default value
+            end
             this.reconfiguration = 1;
             this.PENALTY_FACTOR = 1;  
             w1 = 1;
@@ -119,15 +125,27 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.IDX_TIME = 173;
             this.N_OBS = this.IDX_TIME;
             %% read tables
-            this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
-            this.load_percent = readtable("data/Copy_of_solar_wind_data.csv").hourly_load;  
-            this.load_resi = readtable("data/Copy_of_solar_wind_data.csv").residential;  
-            this.load_comm = readtable("data/Copy_of_solar_wind_data.csv").commercial;  
-            this.load_indu = readtable("data/Copy_of_solar_wind_data.csv").industrial;  
-            this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
-            this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
-            this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
-            this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
+            if this.training == 0
+                this.market_prices = 0.9*readtable("data/Copy_of_solar_wind_data.csv").price;  
+                this.load_percent = 0.9*readtable("data/Copy_of_solar_wind_data.csv").hourly_load;  
+                this.load_resi = 0.9*readtable("data/Copy_of_solar_wind_data.csv").residential;  
+                this.load_comm = 0.9*readtable("data/Copy_of_solar_wind_data.csv").commercial;  
+                this.load_indu = 0.9*readtable("data/Copy_of_solar_wind_data.csv").industrial;  
+                this.wt_KW_max = 0.9*1000*readtable("data/wt_profile.csv").P_wind_max;
+                this.wt_KW_min = 0.9*1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
+                this.pv_KW_max = 0.9*1000*readtable("data/pv_profile.csv").P_solar_max;
+                this.pv_KW_min = 0.9*1000*readtable("data/pv_profile.csv").P_solar_min;  
+            else
+                this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
+                this.load_percent = readtable("data/Copy_of_solar_wind_data.csv").hourly_load;  
+                this.load_resi = readtable("data/Copy_of_solar_wind_data.csv").residential;  
+                this.load_comm = readtable("data/Copy_of_solar_wind_data.csv").commercial;  
+                this.load_indu = readtable("data/Copy_of_solar_wind_data.csv").industrial;  
+                this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
+                this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
+                this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
+                this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
+            end
             this.customer_ids = [9,22,14,30,25] ; %SS line included in customers -> +1
             this.customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
             this.customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
@@ -138,8 +156,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.State = zeros(this.N_OBS,1);
             this.init_obs = zeros(this.N_OBS,1);
     
-            this.training = 0;
-
+           
             %% cache state t = 1
             this.Sbase = 10; %MVA
             %% reconfiguration
@@ -471,7 +488,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             %Compute total reward
             reward = -this.w1 *generation_cost - this.w2*power_transfer_cost + this.w3 * mgo_profit...
             -  penalties;
-            reward = reward / 10;
+           % reward = reward / 10;
             %% add sums to next_state
            
             next_state(this.IDX_BENEFIT_SUM) = single(benefit);
