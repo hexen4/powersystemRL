@@ -122,7 +122,7 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
                 'DiscountFactor', DF, ...
                 'TargetSmoothFactor', soft, ...      % Target policy smoothing
                 'TargetUpdateFrequency', 1, ...      % Delayed target updates
-                'PolicyUpdateFrequency', 1, ...      % Delayed policy updates
+                'PolicyUpdateFrequency', 2, ...      % Delayed policy updates
                 'ExperienceBufferLength', experience_length, ...
                 'MiniBatchSize', batch_size, ...
                 'NumStepsToLookAhead', 23);
@@ -250,9 +250,9 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
             % SAC-specific optimizations
             agentOpts.TargetUpdateFrequency = 1;      % Update targets every step
             agentOpts.NumWarmStartSteps = 2000;
-            agentOpts.EntropyWeightOptions.TargetEntropy = temperature; % Automatic entropy tuning
+            agentOpts.EntropyWeightOptions.TargetEntropy = -prod(actInfo.Dimension); % Automatic entropy tuning
             agentOpts.EntropyWeightOptions.GradientThreshold = 5;
-            agentOpts.EntropyWeightOptions.EntropyWeight = 2;
+            agentOpts.EntropyWeightOptions.EntropyWeight = 1;
             % Create SAC agent
             % Optimizer settings
             agentOpts.ActorOptimizerOptions.LearnRate = LR_actor;
