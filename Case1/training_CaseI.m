@@ -4,7 +4,7 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
 %
 % Inputs:
 %   training        - logical flag or parameter for environment
-%   seed            - random seed for reproducibility
+% %   seed            - random seed for reproducibility
 %   reconfiguration - environment reconfiguration flag
 %   HL_size - size of hidden layers for static 3 HL strucutre for actor /
 %   critic
@@ -122,7 +122,7 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
                 'DiscountFactor', DF, ...
                 'TargetSmoothFactor', soft, ...      % Target policy smoothing
                 'TargetUpdateFrequency', 1, ...      % Delayed target updates
-                'PolicyUpdateFrequency', 1, ...      % Delayed policy updates
+                'PolicyUpdateFrequency', 2, ...      % Delayed policy updates
                 'ExperienceBufferLength', experience_length, ...
                 'MiniBatchSize', batch_size, ...
                 'NumStepsToLookAhead', 23);
@@ -250,9 +250,9 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
             % SAC-specific optimizations
             agentOpts.TargetUpdateFrequency = 1;      % Update targets every step
             agentOpts.NumWarmStartSteps = 2000;
-            agentOpts.EntropyWeightOptions.TargetEntropy = temperature; % Automatic entropy tuning
+            agentOpts.EntropyWeightOptions.TargetEntropy = -prod(actInfo.Dimension); % Automatic entropy tuning
             agentOpts.EntropyWeightOptions.GradientThreshold = 5;
-            agentOpts.EntropyWeightOptions.EntropyWeight = 2;
+            agentOpts.EntropyWeightOptions.EntropyWeight = 1;
             % Create SAC agent
             % Optimizer settings
             agentOpts.ActorOptimizerOptions.LearnRate = LR_actor;
@@ -336,12 +336,12 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
              );
                 %'SequenceLength',        1, ... %for RNN 
             %% ===== CREATE AND TRAIN AGENT =====
-            agent = rlDDPGAgent(actor, critic, agentOpts);
+            
                     % Exploration Noise:
-            agentOpts.NoiseOptions.StandardDeviation          = 0.3;   % High initial exploration
-            agentOpts.NoiseOptions.StandardDeviationDecayRate = 1e-4;  % Decays to ~0.1 by episode 1500
+            agentOpts.NoiseOptions.StandardDeviation          = 0.4;   % High initial exploration
+            agentOpts.NoiseOptions.StandardDeviationDecayRate = 0.00015;  % Decays to ~0.1 by episode 1500
             agentOpts.NoiseOptions.Mean                       = 0;
-            agentOpts.NoiseOptions.InitialAction = 0.1;
+            agentOpts.NoiseOptions.InitialAction = 0.2;
             agentOpts.NoiseOptions.MeanAttractionConstant = 0.1;     % Balanced stability
                     % Optimizer Settings
             agentOpts.CriticOptimizerOptions.LearnRate         = LR_critic;
@@ -352,14 +352,14 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
             l2Factor =L2;
             agentOpts.ActorOptimizerOptions.L2RegularizationFactor = l2Factor;   % L2 for actor
             agentOpts.CriticOptimizerOptions.L2RegularizationFactor = l2Factor;  % L2 for critic
-
+            agent = rlDDPGAgent(actor, critic, agentOpts);
         end
 
     end
     agent.UseExplorationPolicy = true;
     
     %% experience buffer
-    % agent.ExperienceBuffer = rlPrioritizedReplayMemory(obsInfo,actInfo,2e4);
+    % agent.ExperienceBuffer = rlPrioritizedReplayMemory(obsInfo,actInfo,experience_length);
     % agent.ExperienceBuffer.PriorityExponent = 0.6;
     % agent.ExperienceBuffer.InitialImportanceSamplingExponent = 0.5;
     %% Training with Timing
@@ -399,9 +399,9 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
         'L2_regularization', L2, ...
         'max_episodes', episode);
     
-    resultsFile = sprintf('savedAgents_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s.mat', ...
-        seed, reconfiguration, HL_size, L2,LR_actor, LR_critic, DF, algo);
-    save(resultsFile, 'results', 'agent');
+   % resultsFile = sprintf('savedAgents_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s.mat', ...
+   %     seed, reconfiguration, HL_size, L2,LR_actor, LR_critic, DF, algo);
+   % save(resultsFile, 'results', 'agent');
         
     fprintf('Results saved to: %s\n', resultsFile);
 end

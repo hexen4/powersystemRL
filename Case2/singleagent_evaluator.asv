@@ -21,8 +21,8 @@ Action = zeros(37,T);
 done_flags = false(1, T);
 zero_action = [zeros(32,1);0;0.5*ones(4,1)]; 
 trained = 0;
+env.training = 0;
 observations(:,1) = env.State;  
-tic;
 for t = 1:T
     currentObs = observations(:, t);
     if trained == 1
@@ -31,8 +31,6 @@ for t = 1:T
     else
         action = zero_action;
     end 
-elapsed_time = toc; % Stop timer and get elapsed time in seconds
-fprintf('Total elapsed time: %.4f seconds\n', elapsed_time);
 %% calculating scaled actions
     min_incentive = currentObs(env.IDX_MARKET_MINPRICE)*0.3;
     max_incentive = currentObs(env.IDX_MARKET_MINPRICE); %constraint 8
@@ -78,6 +76,7 @@ for w= 1:24
     ramp_penalty(w) = env.EpisodeLogs{1, w}.ramp_penalty;
     generator(w) = env.EpisodeLogs{1, w}.generation_penalty;
     f5(w) =  env.w4*env.EpisodeLogs{1, w}.f5;
+    only_f5(w)
     bus_voltages{w} = env.EpisodeLogs{1,w}.vmag;
     tie_line(1:length(env.EpisodeLogs{1,w}.tie_lines),w) = env.EpisodeLogs{1,w}.tie_lines;
     LEI_unscaled(w) = (env.EpisodeLogs{1,w}.LEI_MAX_unscaled+env.EpisodeLogs{1,w}.LEI_MIN_unscaled)/2;

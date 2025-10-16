@@ -124,6 +124,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.IDX_DISCOMFORTS = 141:172;
             this.IDX_TIME = 173;
             this.N_OBS = this.IDX_TIME;
+            this.training = 0;
             %% read tables
             if this.training == 0
                 this.market_prices = 0.9*readtable("data/Copy_of_solar_wind_data.csv").price;  
@@ -411,7 +412,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             
             %penalty = sum(this.PENALTY_FACTOR^time * (-benefit_diff(violations)) + sum(this.PENALTY_FACTOR^time * benefit_diff(non_violations)));
             %penalty = sum(abs(benefit_diff(violations)));
-            penalty = -benefit_diff;
+            penalty = -benefit_diff; % TODO have a look
             end
    
     

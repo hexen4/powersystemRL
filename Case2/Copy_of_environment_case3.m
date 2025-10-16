@@ -88,24 +88,30 @@ properties
     SOC_max;
     start_SOC;
     event_time; %when HILF happens
+    training;
 end
 
 properties(Access = protected)
     % Termination Flag
     IsDone = false;     
-    training = 0
 end
 
 methods              
     function this = Copy_of_environment_case3()
         %% compatability with RL 
-        ObservationInfo = rlNumericSpec([182 1], ...
+        warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
+        ObservationInfo = rlNumericSpec([217 1], ...
             'LowerLimit', -inf, 'UpperLimit', inf);
         ObservationInfo.Name = 'Microgrid State';
         ActionInfo = rlNumericSpec([37 1], ...
             'LowerLimit', 0 , 'UpperLimit', 1); %important, action output between 0 and 1
         ActionInfo.Name = 'Microgrid Action';
         this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo); % Call Base Class Constructor
+        if nargin > 0
+            this.training = trainingMode;
+        else
+            this.training = 1;  % default value
+        end
         this.PENALTY_FACTOR = 1;  
         w1 = 5;
         w2 = 0.5;
@@ -164,19 +170,32 @@ methods
         this.IDX_SOC = 174:177;
         this.IDX_PGRID_MAX = 178;
         this.IDX_PGRID_MIN = 179;
-        this.IDX_BROKEN = 180:182;
-        this.event_time = [7:10 12:15 19:22];
+        this.IDX_BROKEN = 180:217;
+        this.event_time = [6:9 12:15 19:22];
         %this.event_time = [];
         this.N_OBS = this.IDX_BROKEN(end);
+        
         %% read tables and variable initialisation
-        this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
-        this.load_resi = readtable("data/Copy_of_solar_wind_data.csv").residential;  
-        this.load_comm = readtable("data/Copy_of_solar_wind_data.csv").commercial;  
-        this.load_indu = readtable("data/Copy_of_solar_wind_data.csv").industrial;  
-        this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
-        this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
-        this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
-        this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
+        if this.training == 0
+            this.market_prices = 0.9*readtable("data/Copy_of_solar_wind_data.csv").price;  
+            this.load_resi = 0.9*readtable("data/Copy_of_solar_wind_data.csv").residential;  
+            this.load_comm = 0.9*readtable("data/Copy_of_solar_wind_data.csv").commercial;  
+            this.load_indu = 0.9*readtable("data/Copy_of_solar_wind_data.csv").industrial;  
+            this.wt_KW_max = 0.9*1000*readtable("data/wt_profile.csv").P_wind_max;
+            this.wt_KW_min = 0.9*1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
+            this.pv_KW_max = 0.9*1000*readtable("data/pv_profile.csv").P_solar_max;
+            this.pv_KW_min = 0.9*1000*readtable("data/pv_profile.csv").P_solar_min;  
+        else
+            this.market_prices = readtable("data/Copy_of_solar_wind_data.csv").price;  
+ 
+            this.load_resi = readtable("data/Copy_of_solar_wind_data.csv").residential;  
+            this.load_comm = readtable("data/Copy_of_solar_wind_data.csv").commercial;  
+            this.load_indu = readtable("data/Copy_of_solar_wind_data.csv").industrial;  
+            this.wt_KW_max = 1000*readtable("data/wt_profile.csv").P_wind_max;
+            this.wt_KW_min = 1000*readtable("data/wt_profile.csv").P_wind_min; %everything in kW
+            this.pv_KW_max = 1000*readtable("data/pv_profile.csv").P_solar_max;
+            this.pv_KW_min = 1000*readtable("data/pv_profile.csv").P_solar_min;  
+        end
         this.State = zeros(this.N_OBS,1);
         this.init_obs = zeros(this.N_OBS,1);
         this.Sbase = 10; %MVA
@@ -345,7 +364,9 @@ methods
         next_state(this.IDX_SOC) = State(this.IDX_SOC) + (charge * 0.95 - discharge / 0.95);
         next_state(this.IDX_PGRID_MAX) = P_GRID_MAX;
         next_state(this.IDX_PGRID_MIN) = P_GRID_MIN;
-        next_state(this.IDX_BROKEN) = rowsToRemove_max;
+        next_state(this.IDX_BROKEN) = 0;
+        rows_broken = rowsToRemove_max + 180;
+        next_state(rows_broken) = 1;
         [Vmagdata] = [Vmag_max_disaster ;Vmag_min_disaster];
     end
 
@@ -671,7 +692,7 @@ methods
         F5_min = -(resilience_metric(2) + resilience_metric(4));
         F5 = (F5_max + F5_min) / 2;
  
-        consumer_benefit_limit = max(0,time/2*consumer_benefit_penalty); %clip at -50    to max. MGO_PROFIT without setting icn
+        consumer_benefit_limit = max(0,time/2*consumer_benefit_penalty); %TODO have a look at this if bad
         % if any(flag)
         %     consumer_benefit_limit = consumer_benefit_limit - time/2*sum(flag);
         % end
@@ -743,6 +764,7 @@ methods
             'f3', this.f3, ...
             'f4', this.f4, ...
             'f5', this.f5, ...
+            'only_f5', F5,...
             'VDI_avg', (resilience_metric(3) + resilience_metric(4))/2, ...
             'LEI_avg', (resilience_metric(1) + resilience_metric(2))/2, ...
             'action', scaled_action, ...
