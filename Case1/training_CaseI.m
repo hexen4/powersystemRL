@@ -399,9 +399,9 @@ function [trainingInfo] = training_CaseI(episode,seed,reconfiguration,HL_size,al
         'L2_regularization', L2, ...
         'max_episodes', episode);
     
-   % resultsFile = sprintf('savedAgents_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s.mat', ...
-   %     seed, reconfiguration, HL_size, L2,LR_actor, LR_critic, DF, algo);
-   % save(resultsFile, 'results', 'agent');
+   resultsFile = sprintf('savedAgents_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s.mat', ...
+       seed, reconfiguration, HL_size, L2,LR_actor, LR_critic, DF, algo);
+   save(resultsFile, 'results', 'agent');
         
     fprintf('Results saved to: %s\n', resultsFile);
 end

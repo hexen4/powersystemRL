@@ -124,7 +124,6 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.IDX_DISCOMFORTS = 141:172;
             this.IDX_TIME = 173;
             this.N_OBS = this.IDX_TIME;
-            this.training = 0;
             %% read tables
             if this.training == 0
                 this.market_prices = 0.9*readtable("data/Copy_of_solar_wind_data.csv").price;  

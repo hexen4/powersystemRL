@@ -11,7 +11,7 @@ close all; clear all;
 % for i = 1:numel(agentFiles)
 %     filePath = fullfile(folderPath, agentFiles(i).name);
 %     saved_agent = load(filePath).saved_agent;
-% saved_agent = load('savedAgents\Agent20000.mat').saved_agent;
+saved_agent = load('savedAgents2_s1_r1_h256_L21.000000e-04_LRa0.0010_LRc0.0010_DF0.90_SAC\Agent15000.mat').saved_agent;
 env = Copy_of_environment_case3();
 T = 24; 
 observations = zeros(env.N_OBS, T+1);
@@ -20,7 +20,7 @@ Action_scaled = zeros(37,T);
 Action = zeros(37,T);
 done_flags = false(1, T);
 zero_action = [zeros(32,1);0;0.5*ones(4,1)]; 
-trained = 0;
+trained = 1;
 env.training = 0;
 observations(:,1) = env.State;  
 for t = 1:T
