@@ -1,6 +1,5 @@
 computer = 3; %PH change from 1 -> 3
-HILF = 0; %PH change from 1 -> 0
-
+HILF = 0; %PH don't touch this
 %% define constants
 seeds = [2,3,4,5]; %include more when each agent works
 reconfiguration = 1;
@@ -58,4 +57,5 @@ for seed = 1:length(seeds)
     end
 
 end
+
  
