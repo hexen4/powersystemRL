@@ -1,5 +1,5 @@
-computer = 1; %PH change from 1 -> 2
-HILF = 1; %PH change from 1 -> 0
+computer = 3; %PH change from 1 -> 3
+HILF = 0; %PH change from 1 -> 0
 
 %% define constants
 seeds = [2,3,4,5]; %include more when each agent works
@@ -42,8 +42,8 @@ end
 
 for seed = 1:length(seeds)
     if HILF == 0
-        % traininginfo = training_CaseI(episodes,seed,reconfiguration,HL_size,algo,LR_actor,LR_critic,DF,L2, ...
-        %      soft,batch_size,temperature,experience_length); %train (var name overwritten)
+        traininginfo = training_CaseI(episodes,seed,reconfiguration,HL_size,algo,LR_actor,LR_critic,DF,L2, ...
+        soft,batch_size,temperature,experience_length); %train (var name overwritten)
         saveDir = sprintf('savedAgents_s%d_r%d_h%d_L2%d_LRa%.4f_LRc%.4f_DF%.2f_%s', ...
             seed, reconfiguration, HL_size, L2, LR_actor, LR_critic, DF, algo);
         filepath = [saveDir '\'];
