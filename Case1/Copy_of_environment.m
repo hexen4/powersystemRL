@@ -13,6 +13,12 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
         load_indu;
         State;
         wt_KW_max;
+        f1min;
+        f1max;
+        f2min;
+        f2max;
+        f3min;
+        f3max;
         pv_KW_max;
         wt_KW_min;
         pv_KW_min;
@@ -95,6 +101,11 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.H = 24;
             this.EpisodeLogs = {};   
             this.AllLogs = {};       
+            this.f1max=0;
+            this.f2min=0;
+            this.f2max=0;
+            this.f3min=0;
+            this.f3max=0;
             this.time = 1;
             this.f4 = 0;
             this.f3 = 0;
@@ -501,6 +512,12 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
                 this.f2 = this.f2 + generation_cost;
                 this.f3 = this.f3 + mgo_profit;
                 this.f4 = this.f4 + penalties;
+                this.f1min = this.f1min +power_transfer_cost_min;
+                this.f1max = this.f1max +power_transfer_cost_max;
+                this.f2min = this.f2min + generation_cost_min;
+                this.f2max = this.f2max + generation_cost_max;
+                this.f3min = this.f3min + mgo_profit;
+                this.f3max = this.f3max + mgo_profit;
                 logStruct = struct(...
                 'P_grid_max', P_grid_max, ...
                 'P_grid_min', P_grid_min, ...
@@ -524,6 +541,12 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
                 'mgo_profit_culm', this.f3, ...
                 'sum_penalties', this.f4, ...
                 "penalties", penalties,...
+                'f1min', this.f1min, ...
+                'f1max',this.f1max, ...
+                'f2min',this.f2min, ...
+                'f2max',this.f2max, ...
+                'f3min',this.f3min, ...
+                'f3max',this.f3max, ...
                 'action', scaled_action ...
             );
             else

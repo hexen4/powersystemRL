@@ -1,4 +1,4 @@
-function createfigure(ymatrix1, Y1)
+function batfig(ymatrix1, Y1)
 %CREATEFIGURE(ymatrix1, Y1)
 %  YMATRIX1:  bar matrix data
 %  Y1:  vector of plot y data

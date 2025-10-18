@@ -17,7 +17,7 @@ for t = 1:T
     
     currentObs = observations(:, t);
     action = cell2mat(getAction(saved_agent, currentObs));
-    action = zeros(33,1);
+ 
     %% calculating scaled actions
     min_incentive = currentObs(env.IDX_MARKET_MINPRICE)*0.3;
     max_incentive = currentObs(env.IDX_MARKET_MINPRICE); %constraint 8
@@ -43,9 +43,9 @@ for w= 1:24
     generator_power(w) = env.EpisodeLogs{1, w}.generation_max;
     consumer_penalty(w) = env.EpisodeLogs{1, w}.consumer_benefit_penalty;
     daily(w) = env.EpisodeLogs{1, w}.daily_curtailment_penalty;
-    f1(w) = env.EpisodeLogs{1, w}.power_transfer_cost_culm;
-    f2(w) =  env.EpisodeLogs{1, w}.generator_cost_culm;
-    f3(w) =  env.EpisodeLogs{1, w}.mgo_profit_culm;
+    f1(w) = env.w1*env.EpisodeLogs{1, w}.power_transfer_cost_culm;
+    f2(w) =  env.w2*env.EpisodeLogs{1, w}.generator_cost_culm;
+    f3(w) =  env.w3*env.EpisodeLogs{1, w}.mgo_profit_culm;
     ramp_penalty(w) = env.EpisodeLogs{1, w}.ramp_penalty;
     generator(w) = env.EpisodeLogs{1, w}.generation_penalty;
 end
@@ -56,14 +56,14 @@ f1min = env.EpisodeLogs{1, T}.f1min;
 f1max = env.EpisodeLogs{1, T}.f1max;
 f2min = env.EpisodeLogs{1, T}.f2min;
 f2max = env.EpisodeLogs{1, T}.f2max;
-f1_interval = abs(f1max-f1(T));
-f2_interval = abs(f2max-f2(T));
+f1_interval = f1max-f1(T);
+f2_interval = f2max-f2(T);
 
 disp("Algorithm" + " "+ algo)
 disp("Inference time per hour" + " " +t/24 + "s")
 disp("Reward:" + " " + sum(rewards))
 disp("f1:" + " " + env.EpisodeLogs{1, T}.power_transfer_cost_culm + "±" + f1_interval)
-disp("f2:" + " " + env.EpisodeLogs{1, T}.generator_cost_culm+ "±" + f2_interval)
+disp("f2:" + " " + env.EpisodeLogs{1, T}.generator_cost_culm+ "±" + f1_interval)
 disp("f3:" + " " + env.EpisodeLogs{1, T}.mgo_profit_culm)
 disp("Penalties:" + " " + env.EpisodeLogs{1, T}.sum_penalties)
 disp("Total daily curtailed" + " " + sum(sum(curtailed)) + "kWh");

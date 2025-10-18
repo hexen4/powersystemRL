@@ -23,7 +23,7 @@ end
 load('C:\Users\rando\OneDrive - Durham University\Desktop\Case1\results\DDPG_episodereward.mat')
 load('C:\Users\rando\OneDrive - Durham University\Desktop\Case1\results\SAC_episodereward.mat')
 load('C:\Users\rando\OneDrive - Durham University\Desktop\Case1\results\TD3_episodereward.mat')
-yline(-227.2284,LineWidth=2)
+yline(-365.5146,LineWidth=2)
 hold on
 plot(episode_rewardSAC)
 hold on

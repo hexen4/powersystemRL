@@ -33,8 +33,8 @@ function agentResults = evaluateAgents2(reconfiguration, folderPath, seed, HL_si
 
         min_incentive = currentObs(env.IDX_MARKET_MINPRICE)*0.3;
         max_incentive = currentObs(env.IDX_MARKET_MINPRICE); %constraint 8
-        bat_min = max(-env.Pbatmax*ones(4,1),env.SOC_min - currentObs(env.IDX_SOC));
-        bat_max=  min(env.Pbatmax*ones(4,1),env.SOC_max - currentObs(env.IDX_SOC));
+        bat_min = max(-env.Pbatmax*ones(4,1),0.95*(env.SOC_min - currentObs(env.IDX_SOC)));
+        bat_max=  min(env.Pbatmax*ones(4,1),(env.SOC_max - currentObs(env.IDX_SOC))/0.95);
         max_action = [0.6.*env.State(env.IDX_PROSUMER_PKW); max_incentive; bat_max]; %constraint 4
         min_action = [zeros(32,1);min_incentive; bat_min];
         

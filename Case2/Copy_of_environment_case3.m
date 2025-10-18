@@ -113,9 +113,9 @@ methods
             this.training = 1;  % default value
         end
         this.PENALTY_FACTOR = 1;  
-        w1 = 5;
-        w2 = 0.5;
-        w3 = 20;
+        w1 = 15;
+        w2 = 1;
+        w3 = 10;
         w4 = 1;
         this.w1 = w1/(w1+w2+w3+w4);
         this.n_cust = 32;
@@ -171,7 +171,7 @@ methods
         this.IDX_PGRID_MAX = 178;
         this.IDX_PGRID_MIN = 179;
         this.IDX_BROKEN = 180:217;
-        this.event_time = [6:9 12:15 19:22];
+        this.event_time = [12:15 19:22];
         %this.event_time = [];
         this.N_OBS = this.IDX_BROKEN(end);
         
@@ -200,11 +200,11 @@ methods
         this.init_obs = zeros(this.N_OBS,1);
         this.Sbase = 10; %MVA
         this.Zbase = 121/10;
-        this.ref_f1 = 3600; %% TODO CHANGE
+        this.ref_f1 = 3400; %% TODO CHANGE
         this.ref_f2 =  520; %% TODO CHANGE
         this.LEI_MAX = 0;
         this.LEI_MIN = 0;
-        this.ref_f3  = 500; %% TODO CHANGE
+        this.ref_f3  = 700; %% TODO CHANGE
         %this.ref_voltage = load("savedconstants_OLD\Vmag_reconfig.mat").vmag; %% TODO CHANGE
         this.customer_ids_residential =[2,3,4,6,11,12,13,15,18,21,22,25,30,31,33];
         this.customer_ids_commercial =[5,10,14,19,20,24,27,29,32];
@@ -261,6 +261,7 @@ methods
         this.init_obs(this.IDX_PGRID_MAX) = this.init_obs(this.IDX_TOTAL_LOAD) - this.init_obs(this.IDX_WIND_MAX) - this.init_obs(this.IDX_SOLAR_MAX);
         this.init_obs(this.IDX_PGRID_MIN) = this.init_obs(this.IDX_TOTAL_LOAD) - this.init_obs(this.IDX_WIND_MIN) - this.init_obs(this.IDX_SOLAR_MIN);
         this.State = this.init_obs;          
+
         
     end
 
@@ -365,8 +366,10 @@ methods
         next_state(this.IDX_PGRID_MAX) = P_GRID_MAX;
         next_state(this.IDX_PGRID_MIN) = P_GRID_MIN;
         next_state(this.IDX_BROKEN) = 0;
-        rows_broken = rowsToRemove_max + 180;
-        next_state(rows_broken) = 1;
+        if any(rowsToRemove_max~= 0) %turn OHE flag to 1
+            rows_broken = [rowsToRemove_max] + 180;
+            next_state(rows_broken) = 1;
+        end
         [Vmagdata] = [Vmag_max_disaster ;Vmag_min_disaster];
     end
 
@@ -707,7 +710,7 @@ methods
         power_transfer_cost = power_transfer_cost / this.ref_f1;
         mgo_profit = mgo_profit / this.ref_f3;
         reward = -this.w1 *(generation_cost) - this.w2*(power_transfer_cost) + this.w3 * (mgo_profit)...
-        - penalties + this.w4 * F5;
+        - penalties*(1/20) + this.w4 * F5;
         % if time == 24
         %     if penalties < 100 & mgo_profit > 250
         %         reward = reward + 1000*(mgo_profit - 250);
@@ -728,7 +731,7 @@ methods
             this.f1max = this.f1max +power_transfer_cost_max;
             this.f2min = this.f2min + generation_cost_min;
             this.f2max = this.f2max + generation_cost_max;
-            this.f3min = mgo_profit * this.ref_f3;
+            this.f3min = mgo_profit;
             this.f3max = mgo_profit * this.ref_f3;
             this.f5min = this.f5min + F5_min;
             this.f5max = this.f5max + F5_max;
