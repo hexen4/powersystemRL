@@ -113,9 +113,9 @@ methods
             this.training = 1;  % default value
         end
         this.PENALTY_FACTOR = 1;  
-        w1 = 15;
+        w1 = 50;
         w2 = 1;
-        w3 = 10;
+        w3 = 1;
         w4 = 1;
         this.w1 = w1/(w1+w2+w3+w4);
         this.n_cust = 32;
@@ -143,9 +143,9 @@ methods
         this.f5max=0;
         this.lambda_ = 0.4;
         this.Vbase = 11; %kV
-        this.SOC_min = 100; %from paper
-        this.SOC_max = 600; %from paper
-        this.Pbatmax = 90; %from paper
+        this.SOC_min = 320; %from paper
+        this.SOC_max = 1000; %from paper
+        this.Pbatmax = 150; %from paper
         this.start_SOC = this.SOC_min+(this.SOC_max-this.SOC_min)*0.5; 
         % decision variables -> charging OR discharging 
         %% indices of state
@@ -174,7 +174,7 @@ methods
         this.event_time = [12:15 19:22];
         %this.event_time = [];
         this.N_OBS = this.IDX_BROKEN(end);
-        
+
         %% read tables and variable initialisation
         if this.training == 0
             this.market_prices = 0.9*readtable("data/Copy_of_solar_wind_data.csv").price;  
@@ -709,7 +709,7 @@ methods
         generation_cost = generation_cost / this.ref_f2;
         power_transfer_cost = power_transfer_cost / this.ref_f1;
         mgo_profit = mgo_profit / this.ref_f3;
-        reward = -this.w1 *(generation_cost) - this.w2*(power_transfer_cost) + this.w3 * (mgo_profit)...
+        reward = -this.w1 *(power_transfer_cost) - this.w2*(generation_cost) + this.w3 * (mgo_profit)...
         - penalties*(1/20) + this.w4 * F5;
         % if time == 24
         %     if penalties < 100 & mgo_profit > 250

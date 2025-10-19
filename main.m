@@ -6,8 +6,9 @@ learning_curve = 1; %PH CHANGE
 single_agent = 0; %PH CHANGE
 seeds = [1,2,3,4,5];
 %% training constants
-computer = 3; 
-HILF = 1; 
+training = 0;
+computer = 1; 
+HILF = 0; 
 reconfiguration = 1;
 episodes = 15e3;
 
@@ -57,25 +58,27 @@ saveddirec = {SAC_dir, DDPG_dir,TD3_dir};
 if single_agent == 1
     addpath(genpath(dirPath + 'Case1'));
     rmpath(genpath(dirPath + 'Case2'));
-    DDPG_best_seed = 1; %PH CHANGE EVERYTHING from 61 to 66. need to go to relevant computer
-    %i.e. SAC -> computer 1.
+    %PH CHANGE EVERYTHING from 62 to 70. 
+    % i.e. for SAC. go to computer 1-> input best_seed and best_agent; comment out lines 69,70
+    DDPG_best_seed = 1; 
     SAC_best_seed= 0;
     TD3_best_seed = 0;
-    DDPG_best_agent = 4;
+    DDPG_best_agent = 0;
     SAC_best_agent= 0;
     TD3_best_agent = 0;
     %comment out unneccessary func calls below. i.e. computer 1 -> only SAC
     singleagent_evaluator(DDPG_best_seed,DDPG_best_agent,[DDPG_dir '\'],"DDPG") %incentive, energy curt, total energy curt, f1,f2,f3 values
     singleagent_evaluator(TD3_best_seed,TD3_best_agent,[TD3_dir '\'],"TD3")
     singleagent_evaluator(SAC_best_seed,SAC_best_agent,[SAC_dir '\'],"SAC")
+    %ensemble_(bla)
 end
 %% figure plotting
 if learning_curve == 1
     addpath(genpath(dirPath + 'Case1'));
     rmpath(genpath(dirPath + 'Case2'));
     plot_learningcurve(seeds,saveddirec) %learning curve, table, training time
-    
-else
+end
+if training == 1
     for seed = 1:length(seeds)
         if HILF == 0
             addpath(genpath(dirPath + 'Case1'));

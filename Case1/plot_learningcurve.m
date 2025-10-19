@@ -4,6 +4,9 @@ function [] = plot_learningcurve(seeds, savedirect)
     seed_results = {};
     training_time = [];
     max_episodes = 15000;
+
+    algo_mean = zeros(15000,3);
+    algo_std = zeros(15000,3);
     for w = 1:length(ALGOS)
         savedirec_used = savedirect{w};
         for i = 1:length(seeds)
@@ -39,16 +42,14 @@ function [] = plot_learningcurve(seeds, savedirect)
         elseif w == 3
             fprintf('Maximum TD3 value: %f at Agent %d, seed %d\n', max_value, max_row, max_col);
         end
-    end
-    
-    algo_mean = zeros(15000,3);
-    algo_std = zeros(15000,3);
-
-    for i = 1:length(seeds)
-        algo_mean(:,i) = mean(final_training_results{i},2);
-        algo_std(:,i) = std(final_training_results{i},[],2);
+        
+        algo_mean(:,w) = mean(final_training_results{w},2);
+        algo_std(:,w) = std(final_training_results{w},[],2);
 
     end
+
+
+
     SAC_mean = algo_mean(:,1);
     DDPG_mean = algo_mean(:,2);
     TD3_mean = algo_mean(:,3);
@@ -56,10 +57,7 @@ function [] = plot_learningcurve(seeds, savedirect)
     SAC_mean_clipped = max(SAC_mean, -2000);
     DDPG_mean_clipped = max(DDPG_mean, -2000);
     TD3_mean_clipped = max(TD3_mean, -2000);
-    
-    display("Mean SAC training time "+ " " + mean(training_time(1,5)))
-    display("Mean DDPG training time "+ " " + mean(training_time(6,10)))
-    display("Mean TD3 training time "+ " " + mean(training_time(11,15)))
+
     %% fig. 3a
     figure()
     yline(-365.5146,LineWidth=2)
@@ -81,5 +79,7 @@ function [] = plot_learningcurve(seeds, savedirect)
     xlim([0 15000])
     %print(gcf, 'all.png', '-dpng', '-r800');
 
-
+    display("Mean SAC training time "+ " " + mean(training_time(1,5)))
+    display("Mean DDPG training time "+ " " + mean(training_time(6,10)))
+    display("Mean TD3 training time "+ " " + mean(training_time(11,15)))
 end

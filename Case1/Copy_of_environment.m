@@ -126,7 +126,7 @@ classdef Copy_of_environment < rl.env.MATLABEnvironment
             this.IDX_TOTAL_LOAD               = 8;
             this.IDX_PREV_GENPOWER_MAX        = 9;
             this.IDX_PREV_GENPOWER_MIN        = 10;
-            this.IDX_PROSUMER_PKW             = 11:42;   % 5 consumers
+            this.IDX_PROSUMER_PKW             = 11:42;   
             this.IDX_PROSUMER_SUM             = 43:74;   % t
             this.IDX_CURTAILED_SUM            = 75:106;   % t
             this.IDX_BENEFIT_SUM              = 107:138;   % t
